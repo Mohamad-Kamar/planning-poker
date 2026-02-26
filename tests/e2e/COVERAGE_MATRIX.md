@@ -80,5 +80,6 @@ Legend:
 | Guest fallback after first failed state | guest | Covered | `relay.spec.js` |
 | Relay timeout error path | guest | Covered | `relay.spec.js` |
 | MQTT transport packet handshake | host/guest | Covered | `relay.spec.js` |
+| Host broadcasts are recipient-targeted | host | Covered | `relay.spec.js` |
 | Guest auto-rejoin loop starts on close | guest | Covered | `persistence.spec.js` |
 | Rejoin ack/reject message handling | host/guest | Covered | `resilience.rejoin.spec.js` |

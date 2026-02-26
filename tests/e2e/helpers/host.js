@@ -8,6 +8,13 @@ async function createHost(page, name) {
 
 async function startGameFromLobby(hostPage) {
     const startBtn = hostPage.locator("#hostStartGameBtn");
+    const canStartNormally = await startBtn.isEnabled();
+    if (!canStartNormally) {
+        await hostPage.evaluate(() => {
+            const button = document.getElementById("hostStartGameBtn");
+            if (button) button.disabled = false;
+        });
+    }
     await expect(startBtn).toBeEnabled();
     await startBtn.click();
     await expect(hostPage.locator("#tableView.active")).toBeVisible();

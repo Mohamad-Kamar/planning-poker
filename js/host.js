@@ -129,6 +129,7 @@ function onHostRecoveryRelayMessage(rawData, fromGuestId, relayChannel) {
 
     if (!isKnownGuestId(guestId)) return;
     ensureRelayPeerEntry(guestId, relayChannel);
+    markPeerConnected(guestId);
     handleHostInboundMessage(guestId, rawData);
 }
 
@@ -193,9 +194,17 @@ function attachRelayGuest(guestId, guestName, relayChannel) {
     ensureRelayPeerEntry(guestId, relayChannel);
     const peer = state.hostPeers.get(guestId);
     peer.name = sanitizeNameFn(guestName || peer.name || "Guest");
-    upsertHostPlayer(guestId, peer.name, true, sanitizeNameFn);
-    peer.connected = true;
+    markPeerConnected(guestId, peer.name);
     saveSessionSnapshot();
+}
+
+function markPeerConnected(guestId, preferredName) {
+    const peer = state.hostPeers.get(guestId);
+    if (!peer) return;
+    peer.connected = true;
+    const name = sanitizeNameFn(preferredName || peer.name || getKnownGuestName(guestId));
+    peer.name = name;
+    upsertHostPlayer(guestId, name, true, sanitizeNameFn);
 }
 
 function clearPendingRejoin(guestId) {
@@ -537,8 +546,7 @@ export function onPeerChannelOpen(guestId, channel) {
     const entry = state.hostPeers.get(guestId);
     if (!entry) return;
     if (channel && entry.dc !== channel) return;
-    entry.connected = true;
-    upsertHostPlayer(guestId, entry.name, true, sanitizeNameFn);
+    markPeerConnected(guestId);
     broadcastState();
     renderHostLobby();
     renderTable();
@@ -643,6 +651,29 @@ export function handleHostInboundMessage(guestId, rawData) {
         return;
     }
 
+    if (message.t === "presence") {
+        const peer = state.hostPeers.get(guestId);
+        const nextName = sanitizeNameFn(message.n || (peer ? peer.name : getKnownGuestName(guestId)));
+        let changed = false;
+        if (peer && peer.name !== nextName) {
+            peer.name = nextName;
+            changed = true;
+        }
+        const player = state.session.players[guestId];
+        const wasConnected = !!(player && player.connected);
+        const previousName = player ? player.name : null;
+        upsertHostPlayer(guestId, nextName, true, sanitizeNameFn);
+        if (!wasConnected || previousName !== nextName) {
+            changed = true;
+        }
+        if (changed) {
+            broadcastState();
+            renderHostLobby();
+            renderTable();
+        }
+        return;
+    }
+
     if (message.t === "leave") {
         onPeerChannelClose(guestId);
     }
@@ -679,16 +710,12 @@ function sanitizeRoundTitle(title) {
 
 export function broadcastMessageToGuests(message) {
     const peers = Array.from(state.hostPeers.values());
-    const sentRelayKeys = new Set();
     for (const peer of peers) {
-        if (peer.dc && peer.dc.readyState === "open") {
-            if (peer.dc.transportType === "mqtt-relay") {
-                const relayKey = peer.dc.relayKey || "mqtt-relay";
-                if (sentRelayKeys.has(relayKey)) continue;
-                sentRelayKeys.add(relayKey);
-            }
-            sendJson(peer.dc, message);
-        }
+        if (!peer.dc || peer.dc.readyState !== "open") continue;
+        const outbound = message && Object.prototype.hasOwnProperty.call(message, "to")
+            ? message
+            : { ...message, to: peer.id };
+        sendJson(peer.dc, outbound);
     }
 }
 

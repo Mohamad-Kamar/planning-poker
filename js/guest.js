@@ -19,10 +19,12 @@ import { clearSessionSnapshot, saveSessionSnapshot } from "./persistence.js";
 const RELAY_FALLBACK_DELAY_MS = 2500;
 const REJOIN_ACK_TIMEOUT_MS = 4500;
 const REJOIN_MAX_RETRIES = 8;
+const PRESENCE_PING_INTERVAL_MS = 12_000;
 
 let guestRejoinTimer = null;
 let guestRejoinAttempts = 0;
 let guestAwaitingRejoinAck = false;
+let guestPresenceTimer = null;
 
 export function startGuestSession(displayName) {
     shutdownHost();
@@ -36,6 +38,7 @@ export function startGuestSession(displayName) {
     state.roomId = null;
     state.guestAutoRejoinEnabled = true;
     resetGuestRejoinState();
+    stopGuestPresenceLoop();
 
     showView("guestConnect");
     onRegenerateGuestOffer();
@@ -49,6 +52,7 @@ export async function onRegenerateGuestOffer() {
         state.guestResponseApplied = false;
         state.guestAutoRejoinEnabled = true;
         resetGuestRejoinState();
+        stopGuestPresenceLoop();
         els.connectGuestBtn.disabled = false;
         setGuestStep(1);
         showNotice(els.guestConnectNotice, "Generating join code...", "info");
@@ -119,6 +123,7 @@ export async function onGuestConnectWithResponseCode() {
 
 export async function createGuestOfferCode() {
     resetGuestRejoinState();
+    stopGuestPresenceLoop();
     resetGuestConnection();
     const pc = createPeerConnection();
     const dc = pc.createDataChannel("poker");
@@ -244,6 +249,7 @@ export function setupGuestPeerHandlers(pc, dc) {
 export function onHostChannelOpen(channel) {
     if (state.guestChannel !== channel) return;
     resetGuestRejoinState();
+    startGuestPresenceLoop();
     updateConnectionStatus(true, "Connected to host");
     setGuestStep(3);
     showNotice(els.guestConnectNotice, "Connected. Entering table...", "info");
@@ -260,6 +266,7 @@ export function onHostChannelOpen(channel) {
 export function onHostChannelClose(channel) {
     if (state.guestChannel !== channel) return;
     guestAwaitingRejoinAck = false;
+    stopGuestPresenceLoop();
     if (state.guestChannel === channel) {
         state.guestChannel = null;
     }
@@ -343,6 +350,41 @@ function resetGuestRejoinState() {
     clearGuestRejoinTimer();
     guestRejoinAttempts = 0;
     guestAwaitingRejoinAck = false;
+}
+
+function stopGuestPresenceLoop() {
+    if (!guestPresenceTimer) return;
+    clearInterval(guestPresenceTimer);
+    guestPresenceTimer = null;
+}
+
+function canSendPresencePing() {
+    if (state.role !== "guest") return false;
+    if (!state.guestChannel) return false;
+    return state.guestChannel.readyState === "open";
+}
+
+function sendPresencePing(reason) {
+    if (!canSendPresencePing()) return;
+    sendJson(state.guestChannel, {
+        t: "presence",
+        n: state.displayName,
+        reason: reason || "beat"
+    });
+}
+
+function startGuestPresenceLoop() {
+    stopGuestPresenceLoop();
+    if (!canSendPresencePing()) return;
+    // Send an immediate presence ping so host can update status quickly after recoveries.
+    sendPresencePing("immediate");
+    guestPresenceTimer = setInterval(() => {
+        if (!canSendPresencePing()) {
+            stopGuestPresenceLoop();
+            return;
+        }
+        sendPresencePing("beat");
+    }, PRESENCE_PING_INTERVAL_MS);
 }
 
 function getGuestRejoinDelayMs() {
@@ -471,7 +513,6 @@ export function handleGuestInboundMessage(rawData, channel) {
 
     if (message.t === "kicked") {
         if (message.to && message.to !== state.localId) return;
-        if (!message.to && channel && channel.transportType === "mqtt-relay") return;
         const reason = typeof message.reason === "string" && message.reason.trim()
             ? message.reason.trim()
             : "Removed by host.";

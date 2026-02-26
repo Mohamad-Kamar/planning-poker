@@ -287,15 +287,23 @@ function getTopics(roomId) {
     const safeRoomId = String(roomId || "").trim();
     return {
         hostInbound: "pp/" + safeRoomId + "/h",
-        guestInbound: "pp/" + safeRoomId + "/g"
+        guestInboundRoot: "pp/" + safeRoomId + "/g"
     };
+}
+
+function getGuestInboundTopic(roomId, guestId) {
+    const topics = getTopics(roomId);
+    const safeGuestId = String(guestId || "").trim();
+    return topics.guestInboundRoot + "/" + safeGuestId;
 }
 
 export function createMqttRelayChannel(role, roomId, localId, callbacks = {}) {
     const normalizedRole = role === "host" ? "host" : "guest";
     const topics = getTopics(roomId);
-    const subscribeTopic = normalizedRole === "host" ? topics.hostInbound : topics.guestInbound;
-    const publishTopic = normalizedRole === "host" ? topics.guestInbound : topics.hostInbound;
+    const subscribeTopic = normalizedRole === "host"
+        ? topics.hostInbound
+        : getGuestInboundTopic(roomId, localId);
+    const publishTopic = topics.hostInbound;
     const clientId = "planning-poker-" + normalizedRole + "-" + String(localId || "").slice(0, 12) + "-" + Date.now().toString(36);
 
     const channel = {
@@ -315,7 +323,17 @@ export function createMqttRelayChannel(role, roomId, localId, callbacks = {}) {
                 mqttClient.send(publishTopic, wrapped);
                 return;
             }
-            mqttClient.send(publishTopic, payload);
+            let parsed;
+            try {
+                parsed = JSON.parse(payload);
+            } catch (_error) {
+                throw new Error("Host relay payload must be JSON.");
+            }
+            const toGuestId = typeof parsed.to === "string" ? parsed.to.trim() : "";
+            if (!toGuestId) {
+                throw new Error("Host relay message is missing target guest id.");
+            }
+            mqttClient.send(getGuestInboundTopic(roomId, toGuestId), payload);
         }
     };
 

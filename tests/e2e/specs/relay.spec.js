@@ -321,3 +321,32 @@ test("mqtt relay channel works with mocked websocket transport", async ({ page }
     expect(result.sawConnectPacket).toBe(true);
     expect(result.sawSubscribePacket).toBe(true);
 });
+
+test("host broadcast targets each guest explicitly", async ({ page }) => {
+    await openHome(page);
+    const result = await page.evaluate(async () => {
+        const { state } = await import("/js/state.js");
+        const { broadcastMessageToGuests } = await import("/js/host.js");
+
+        const sent = [];
+        const sharedRelay = {
+            readyState: "open",
+            transportType: "mqtt-relay",
+            send(data) {
+                sent.push(JSON.parse(String(data)));
+            }
+        };
+
+        state.role = "host";
+        state.localId = "host-routing";
+        state.hostPeers.clear();
+        state.hostPeers.set("guest-a", { id: "guest-a", dc: sharedRelay });
+        state.hostPeers.set("guest-b", { id: "guest-b", dc: sharedRelay });
+
+        broadcastMessageToGuests({ t: "state", round: 3 });
+        return sent;
+    });
+
+    expect(result.some((msg) => msg.t === "state" && msg.to === "guest-a" && msg.round === 3)).toBe(true);
+    expect(result.some((msg) => msg.t === "state" && msg.to === "guest-b" && msg.round === 3)).toBe(true);
+});
