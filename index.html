@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planning Poker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="title-bar">
+            <h1>Planning Poker</h1>
+            <div class="subtle">Zero-server WebRTC with manual handshake</div>
+        </div>
+
+        <main>
+            <section id="homeView" class="view active">
+                <div class="stack-lg">
+                    <div>
+                        <div class="panel-heading">Start Session</div>
+                        <div class="panel-note">Enter your display name, then create a room or join one.</div>
+                    </div>
+
+                    <div class="stack">
+                        <label class="field-label" for="displayNameInput">Display Name</label>
+                        <input id="displayNameInput" type="text" maxlength="40" placeholder="Your name">
+                    </div>
+
+                    <div class="row">
+                        <button id="createRoomBtn" class="btn btn-primary">Create Room</button>
+                        <button id="joinRoomBtn" class="btn btn-secondary">Join Room</button>
+                    </div>
+
+                    <div id="homeNotice" class="notice info"></div>
+                </div>
+            </section>
+
+            <section id="hostLobbyView" class="view">
+                <div class="stack-lg">
+                    <div class="row-between">
+                        <div>
+                            <div class="panel-heading">Host Lobby</div>
+                            <div class="panel-note">Guest sends Join Code -> host pastes it -> host sends Response Code back.</div>
+                        </div>
+                        <span class="chip">You are host</span>
+                    </div>
+
+                    <div class="grid-two">
+                        <div class="panel">
+                            <div class="panel-heading">Players</div>
+                            <div id="hostPlayerList" class="player-list"></div>
+                        </div>
+
+                        <div class="panel stack">
+                            <div>
+                                <div class="panel-heading">Add Player</div>
+                                <div class="panel-note">Paste one guest code at a time, click Accept, then share the generated response code.</div>
+                            </div>
+                            <textarea id="hostIncomingJoinCode" class="code-box" placeholder="Paste guest join code"></textarea>
+                            <div class="row">
+                                <button id="acceptGuestBtn" class="btn btn-primary">Accept Guest</button>
+                                <button id="clearHostJoinCodeBtn" class="btn btn-secondary">Clear</button>
+                            </div>
+
+                            <div class="stack">
+                                <label class="field-label">Response Code (send to guest)</label>
+                                <div id="hostResponseCode" class="code-display mono">No response code yet.</div>
+                                <div id="hostResponseCodeMeta" class="code-meta">Waiting for guest join code.</div>
+                                <div class="row">
+                                    <button id="copyHostResponseCodeBtn" class="btn btn-secondary">Copy Response Code</button>
+                                </div>
+                            </div>
+                            <div id="hostLobbyNotice" class="notice info"></div>
+                        </div>
+                    </div>
+
+                    <div class="row-between">
+                        <button id="hostStartGameBtn" class="btn btn-primary" disabled>Start Game</button>
+                        <button id="hostBackHomeBtn" class="btn btn-secondary">Back</button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="guestConnectView" class="view">
+                <div class="stack-lg">
+                    <div class="row-between">
+                        <div>
+                            <div class="panel-heading">Join Host</div>
+                            <div class="panel-note">1) Copy your Join Code and send it to host. 2) Paste host Response Code. 3) Enter table.</div>
+                        </div>
+                        <span class="chip">Guest mode</span>
+                    </div>
+
+                    <div class="stepper">
+                        <span id="guestStep1" class="step active">1. Share Join Code</span>
+                        <span id="guestStep2" class="step">2. Paste Response</span>
+                        <span id="guestStep3" class="step">3. Connected</span>
+                    </div>
+
+                    <div class="panel stack">
+                        <label class="field-label">Your Join Code</label>
+                        <div id="guestJoinCode" class="code-display mono">Generating code...</div>
+                        <div id="guestJoinCodeMeta" class="code-meta">Preparing connection details.</div>
+                        <div class="row">
+                            <button id="copyGuestJoinCodeBtn" class="btn btn-primary">Copy Join Code</button>
+                            <button id="regenerateGuestJoinCodeBtn" class="btn btn-secondary">Regenerate</button>
+                        </div>
+                    </div>
+
+                    <div class="panel stack">
+                        <label class="field-label" for="guestResponseCodeInput">Host Response Code</label>
+                        <textarea id="guestResponseCodeInput" class="code-box" placeholder="Paste host response code"></textarea>
+                        <div class="row">
+                            <button id="connectGuestBtn" class="btn btn-primary">Connect</button>
+                            <button id="guestBackHomeBtn" class="btn btn-secondary">Back</button>
+                        </div>
+                    </div>
+
+                    <div id="guestConnectNotice" class="notice info"></div>
+                </div>
+            </section>
+
+            <section id="tableView" class="view">
+                <div class="table-layout">
+                    <div class="row-between">
+                        <div>
+                            <div class="panel-heading">Game Table</div>
+                            <div id="tableSubtitle" class="panel-note">Round 1</div>
+                        </div>
+                        <div class="row">
+                            <span id="tableRoleChip" class="chip">Guest</span>
+                            <button id="leaveSessionBtn" class="btn btn-danger">Leave</button>
+                        </div>
+                    </div>
+
+                    <div id="statsBar" class="stats-bar">
+                        <div class="stat-box"><div class="stat-key">Average</div><div id="statAverage" class="stat-value">-</div></div>
+                        <div class="stat-box"><div class="stat-key">Median</div><div id="statMedian" class="stat-value">-</div></div>
+                        <div class="stat-box"><div class="stat-key">Min</div><div id="statMin" class="stat-value">-</div></div>
+                        <div class="stat-box"><div class="stat-key">Max</div><div id="statMax" class="stat-value">-</div></div>
+                        <div class="stat-box"><div class="stat-key">Consensus</div><div id="statConsensus" class="stat-value">-</div></div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-heading">Players</div>
+                        <div id="tablePlayersGrid" class="cards-grid"></div>
+                    </div>
+
+                    <div class="panel stack">
+                        <div class="panel-heading">Your Vote</div>
+                        <div id="votePalette" class="card-palette"></div>
+                        <div class="row-between">
+                            <div class="status"><span id="connectionStatusDot" class="status-dot offline"></span><span id="connectionStatusText">Not connected</span></div>
+                            <div class="row">
+                                <button id="clearVoteBtn" class="btn btn-secondary">Clear Vote</button>
+                                <button id="hostRevealBtn" class="btn btn-primary">Reveal</button>
+                                <button id="hostResetBtn" class="btn btn-secondary">New Round</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="tableNotice" class="notice info"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="poker.js"></script>
+</body>
+</html>

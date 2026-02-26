@@ -9,7 +9,8 @@ It uses:
 
 ## Files
 
-- `index.html` - UI and styles
+- `index.html` - UI structure
+- `styles.css` - styling and responsive layout
 - `poker.js` - signaling codec, WebRTC logic, game state, UI wiring
 
 ## Run
@@ -33,7 +34,8 @@ Because this app has no backend, clients exchange signaling data manually:
 Signaling code details:
 - JSON payloads are compressed with `CompressionStream("deflate")` when available.
 - Encoded as URL-safe base64.
-- SDP is compacted into essential fields (`ice-ufrag`, `ice-pwd`, fingerprint, setup, candidates), then reconstructed on decode.
+- SDP is compacted into essential fields (`ice-ufrag`, `ice-pwd`, fingerprint, candidates), then reconstructed on decode.
+- Codes are shown grouped for readability; pasted codes can include whitespace/newlines.
 
 ## Game Flow
 
@@ -49,3 +51,9 @@ Signaling code details:
 - If host disconnects/closes, the session ends.
 - There is no persistence; state is in-memory only.
 - Browser support for `CompressionStream` may vary. The app falls back to uncompressed code payloads when needed.
+
+## Sanity References
+
+- `serverless-webrtc` demo: manual offer/answer exchange without a signaling server (`http://cjb.github.io/serverless-webrtc/`).
+- MDN guidance for non-trickle fallback: wait for ICE gathering completion when not relying on trickle exchange (`RTCPeerConnection.canTrickleIceCandidates` docs).
+- Official `webrtc/samples` datachannel example: confirms standard create-offer/create-answer/datachannel flow used here.
