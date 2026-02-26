@@ -66,8 +66,10 @@
                                 <label class="field-label">Response Code (send to guest)</label>
                                 <div id="hostResponseCode" class="code-display mono">No response code yet.</div>
                                 <div id="hostResponseCodeMeta" class="code-meta">Waiting for guest join code.</div>
+                                <div id="hostResponseCodeQuality" class="code-quality quality-medium">Shareability: waiting for code</div>
                                 <div class="row">
-                                    <button id="copyHostResponseCodeBtn" class="btn btn-secondary">Copy Response Code</button>
+                                    <button id="copyHostResponseCodeBtn" class="btn btn-secondary">Copy Plain</button>
+                                    <button id="copyHostResponseCodeFormattedBtn" class="btn btn-secondary">Copy Formatted</button>
                                 </div>
                             </div>
                             <div id="hostLobbyNotice" class="notice info"></div>
@@ -101,8 +103,10 @@
                         <label class="field-label">Your Join Code</label>
                         <div id="guestJoinCode" class="code-display mono">Generating code...</div>
                         <div id="guestJoinCodeMeta" class="code-meta">Preparing connection details.</div>
+                        <div id="guestJoinCodeQuality" class="code-quality quality-medium">Shareability: waiting for code</div>
                         <div class="row">
-                            <button id="copyGuestJoinCodeBtn" class="btn btn-primary">Copy Join Code</button>
+                            <button id="copyGuestJoinCodeBtn" class="btn btn-primary">Copy Plain</button>
+                            <button id="copyGuestJoinCodeFormattedBtn" class="btn btn-secondary">Copy Formatted</button>
                             <button id="regenerateGuestJoinCodeBtn" class="btn btn-secondary">Regenerate</button>
                         </div>
                     </div>

@@ -36,6 +36,13 @@ Signaling code details:
 - Encoded as URL-safe base64.
 - SDP is compacted into essential fields (`ice-ufrag`, `ice-pwd`, fingerprint, candidates), then reconstructed on decode.
 - Codes are shown grouped for readability; pasted codes can include whitespace/newlines.
+- Each code box supports two copy modes:
+  - **Copy Plain**: compact single-line string (best for reliability).
+  - **Copy Formatted**: grouped string with spaces/newlines (best for readability in chat).
+- A **Shareability** hint appears under each code:
+  - **Easy to share**: short code, low copy risk
+  - **Okay to share**: medium length
+  - **Might be tricky**: long code, verify full paste before connecting
 
 ## Game Flow
 

@@ -36,7 +36,9 @@ const els = {
     clearHostJoinCodeBtn: document.getElementById("clearHostJoinCodeBtn"),
     hostResponseCode: document.getElementById("hostResponseCode"),
     hostResponseCodeMeta: document.getElementById("hostResponseCodeMeta"),
+    hostResponseCodeQuality: document.getElementById("hostResponseCodeQuality"),
     copyHostResponseCodeBtn: document.getElementById("copyHostResponseCodeBtn"),
+    copyHostResponseCodeFormattedBtn: document.getElementById("copyHostResponseCodeFormattedBtn"),
     hostLobbyNotice: document.getElementById("hostLobbyNotice"),
     hostStartGameBtn: document.getElementById("hostStartGameBtn"),
     hostBackHomeBtn: document.getElementById("hostBackHomeBtn"),
@@ -45,7 +47,9 @@ const els = {
     guestStep3: document.getElementById("guestStep3"),
     guestJoinCode: document.getElementById("guestJoinCode"),
     guestJoinCodeMeta: document.getElementById("guestJoinCodeMeta"),
+    guestJoinCodeQuality: document.getElementById("guestJoinCodeQuality"),
     copyGuestJoinCodeBtn: document.getElementById("copyGuestJoinCodeBtn"),
+    copyGuestJoinCodeFormattedBtn: document.getElementById("copyGuestJoinCodeFormattedBtn"),
     regenerateGuestJoinCodeBtn: document.getElementById("regenerateGuestJoinCodeBtn"),
     guestResponseCodeInput: document.getElementById("guestResponseCodeInput"),
     connectGuestBtn: document.getElementById("connectGuestBtn"),
@@ -78,9 +82,27 @@ function init() {
     renderVotePalette();
     wireEvents();
     els.copyGuestJoinCodeBtn.disabled = true;
+    els.copyGuestJoinCodeFormattedBtn.disabled = true;
     els.copyHostResponseCodeBtn.disabled = true;
-    setSignalCodeDisplay(els.guestJoinCode, els.guestJoinCodeMeta, "", "Generating code...", "Preparing connection details.");
-    setSignalCodeDisplay(els.hostResponseCode, els.hostResponseCodeMeta, "", "No response code yet.", "Waiting for guest join code.");
+    els.copyHostResponseCodeFormattedBtn.disabled = true;
+    setSignalCodeDisplay(
+        els.guestJoinCode,
+        els.guestJoinCodeMeta,
+        els.guestJoinCodeQuality,
+        "",
+        "Generating code...",
+        "Preparing connection details.",
+        "Shareability: waiting for code"
+    );
+    setSignalCodeDisplay(
+        els.hostResponseCode,
+        els.hostResponseCodeMeta,
+        els.hostResponseCodeQuality,
+        "",
+        "No response code yet.",
+        "Waiting for guest join code.",
+        "Shareability: waiting for code"
+    );
     updateConnectionStatus(false, "Not connected");
     showView("home");
 }
@@ -94,6 +116,10 @@ function wireEvents() {
     });
     els.copyHostResponseCodeBtn.addEventListener("click", async () => {
         await copyTextWithFeedback(state.hostResponseCodeRaw, els.copyHostResponseCodeBtn, "Copied");
+    });
+    els.copyHostResponseCodeFormattedBtn.addEventListener("click", async () => {
+        const formatted = formatSignalCodeForDisplay(state.hostResponseCodeRaw);
+        await copyTextWithFeedback(formatted, els.copyHostResponseCodeFormattedBtn, "Copied");
     });
     els.hostStartGameBtn.addEventListener("click", () => {
         if (!state.session) return;
@@ -110,6 +136,10 @@ function wireEvents() {
 
     els.copyGuestJoinCodeBtn.addEventListener("click", async () => {
         await copyTextWithFeedback(state.guestJoinCodeRaw, els.copyGuestJoinCodeBtn, "Copied");
+    });
+    els.copyGuestJoinCodeFormattedBtn.addEventListener("click", async () => {
+        const formatted = formatSignalCodeForDisplay(state.guestJoinCodeRaw);
+        await copyTextWithFeedback(formatted, els.copyGuestJoinCodeFormattedBtn, "Copied");
     });
     els.regenerateGuestJoinCodeBtn.addEventListener("click", onRegenerateGuestOffer);
     els.connectGuestBtn.addEventListener("click", onGuestConnectWithResponseCode);
@@ -167,7 +197,15 @@ function onCreateRoom() {
     state.role = "host";
     state.selectedVote = null;
     state.hostResponseCodeRaw = "";
-    setSignalCodeDisplay(els.hostResponseCode, els.hostResponseCodeMeta, "", "No response code yet.", "Waiting for guest join code.");
+    setSignalCodeDisplay(
+        els.hostResponseCode,
+        els.hostResponseCodeMeta,
+        els.hostResponseCodeQuality,
+        "",
+        "No response code yet.",
+        "Waiting for guest join code.",
+        "Shareability: waiting for code"
+    );
     state.session = {
         round: 1,
         started: false,
@@ -201,7 +239,16 @@ async function onRegenerateGuestOffer() {
         showNotice(els.guestConnectNotice, "Generating join code...", "info");
         state.guestJoinCodeRaw = "";
         els.copyGuestJoinCodeBtn.disabled = true;
-        setSignalCodeDisplay(els.guestJoinCode, els.guestJoinCodeMeta, "", "Generating code...", "Preparing connection details.");
+        els.copyGuestJoinCodeFormattedBtn.disabled = true;
+        setSignalCodeDisplay(
+            els.guestJoinCode,
+            els.guestJoinCodeMeta,
+            els.guestJoinCodeQuality,
+            "",
+            "Generating code...",
+            "Preparing connection details.",
+            "Shareability: waiting for code"
+        );
         await createGuestOfferCode();
         showNotice(els.guestConnectNotice, "Share this join code with the host. Then paste the response code.", "info");
     } catch (error) {
@@ -362,6 +409,7 @@ function renderHostLobby() {
     els.hostStartGameBtn.disabled = state.session.started ? false : !canStart;
     els.hostStartGameBtn.textContent = state.session.started ? "Return to Table" : "Start Game";
     els.copyHostResponseCodeBtn.disabled = !state.hostResponseCodeRaw;
+    els.copyHostResponseCodeFormattedBtn.disabled = !state.hostResponseCodeRaw;
 }
 
 function renderTable() {
@@ -581,8 +629,15 @@ async function createGuestOfferCode() {
     };
     const code = await encodeSignalCode(payload);
     state.guestJoinCodeRaw = code;
-    setSignalCodeDisplay(els.guestJoinCode, els.guestJoinCodeMeta, code, "Generating code...");
+    setSignalCodeDisplay(
+        els.guestJoinCode,
+        els.guestJoinCodeMeta,
+        els.guestJoinCodeQuality,
+        code,
+        "Generating code..."
+    );
     els.copyGuestJoinCodeBtn.disabled = false;
+    els.copyGuestJoinCodeFormattedBtn.disabled = false;
     els.guestResponseCodeInput.value = "";
 }
 
@@ -634,7 +689,13 @@ async function acceptGuestOffer(guestId, guestName, offerDescription) {
     };
     const responseCode = await encodeSignalCode(responsePayload);
     state.hostResponseCodeRaw = responseCode;
-    setSignalCodeDisplay(els.hostResponseCode, els.hostResponseCodeMeta, responseCode, "No response code yet.");
+    setSignalCodeDisplay(
+        els.hostResponseCode,
+        els.hostResponseCodeMeta,
+        els.hostResponseCodeQuality,
+        responseCode,
+        "No response code yet."
+    );
     showNotice(els.hostLobbyNotice, "Accepted " + guestName + ". Copy response code and send it back.", "info");
     renderHostLobby();
 }
@@ -857,8 +918,17 @@ function shutdownHost(noticeMessage) {
     if (state.role === "host") state.role = "idle";
     state.selectedVote = null;
     state.hostResponseCodeRaw = "";
-    setSignalCodeDisplay(els.hostResponseCode, els.hostResponseCodeMeta, "", "No response code yet.", "Waiting for guest join code.");
+    setSignalCodeDisplay(
+        els.hostResponseCode,
+        els.hostResponseCodeMeta,
+        els.hostResponseCodeQuality,
+        "",
+        "No response code yet.",
+        "Waiting for guest join code.",
+        "Shareability: waiting for code"
+    );
     els.copyHostResponseCodeBtn.disabled = true;
+    els.copyHostResponseCodeFormattedBtn.disabled = true;
     els.hostIncomingJoinCode.value = "";
     if (noticeMessage) showNotice(els.homeNotice, noticeMessage, "info");
 }
@@ -867,8 +937,17 @@ function shutdownGuest(noticeMessage) {
     resetGuestConnection();
     state.guestRemoteState = null;
     state.guestJoinCodeRaw = "";
-    setSignalCodeDisplay(els.guestJoinCode, els.guestJoinCodeMeta, "", "Generating code...", "Preparing connection details.");
+    setSignalCodeDisplay(
+        els.guestJoinCode,
+        els.guestJoinCodeMeta,
+        els.guestJoinCodeQuality,
+        "",
+        "Generating code...",
+        "Preparing connection details.",
+        "Shareability: waiting for code"
+    );
     els.copyGuestJoinCodeBtn.disabled = true;
+    els.copyGuestJoinCodeFormattedBtn.disabled = true;
     if (state.role === "guest") state.role = "idle";
     updateConnectionStatus(false, "Not connected");
     if (noticeMessage) showNotice(els.homeNotice, noticeMessage, "info");
@@ -1281,11 +1360,16 @@ function normalizeSetup(type) {
     return "actpass";
 }
 
-function setSignalCodeDisplay(displayElement, metaElement, rawCode, emptyText, emptyMetaText) {
+function setSignalCodeDisplay(displayElement, metaElement, qualityElement, rawCode, emptyText, emptyMetaText, emptyQualityText) {
     const code = String(rawCode || "").trim();
     if (!code) {
         displayElement.textContent = emptyText;
         if (metaElement) metaElement.textContent = emptyMetaText || "";
+        if (qualityElement) {
+            qualityElement.textContent = emptyQualityText || "";
+            qualityElement.classList.remove("quality-short", "quality-medium", "quality-long");
+            qualityElement.classList.add("quality-medium");
+        }
         return;
     }
 
@@ -1299,6 +1383,13 @@ function setSignalCodeDisplay(displayElement, metaElement, rawCode, emptyText, e
         const longHint = code.length > 900 ? " • long code" : "";
         metaElement.textContent = code.length + " chars • " + encoding + longHint;
     }
+
+    if (qualityElement) {
+        const shareability = getCodeShareability(code.length);
+        qualityElement.textContent = "Shareability: " + shareability.label + " - " + shareability.helpText;
+        qualityElement.classList.remove("quality-short", "quality-medium", "quality-long");
+        qualityElement.classList.add(shareability.className);
+    }
 }
 
 function formatSignalCodeForDisplay(code) {
@@ -1309,4 +1400,26 @@ function formatSignalCodeForDisplay(code) {
         lines.push(groups.slice(i, i + 6).join(" "));
     }
     return lines.join("\n");
+}
+
+function getCodeShareability(codeLength) {
+    if (codeLength <= 320) {
+        return {
+            label: "Easy to share",
+            helpText: "short code, low copy risk",
+            className: "quality-short"
+        };
+    }
+    if (codeLength <= 700) {
+        return {
+            label: "Okay to share",
+            helpText: "medium length, still manageable",
+            className: "quality-medium"
+        };
+    }
+    return {
+        label: "Might be tricky",
+        helpText: "long code, double-check full paste",
+        className: "quality-long"
+    };
 }
