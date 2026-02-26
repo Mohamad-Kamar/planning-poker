@@ -400,31 +400,40 @@ textarea.code-box {
     border-radius: var(--radius-lg);
     background: #fff;
     min-height: 130px;
-    padding: 12px;
-    display: grid;
-    align-content: space-between;
+    position: relative;
+    overflow: hidden;
     box-shadow: var(--shadow);
-    transition: transform 0.2s ease;
-    transform-style: preserve-3d;
-}
-
-.player-card.revealed {
-    transform: rotateY(180deg);
+    perspective: 1000px;
 }
 
 .player-card-face {
+    position: absolute;
+    inset: 0;
+    padding: 12px;
     backface-visibility: hidden;
     display: grid;
     gap: 8px;
     height: 100%;
+    transition: transform 0.24s ease;
+}
+
+.player-card-face:not(.player-card-back) {
+    transform: rotateY(0deg);
+}
+
+.player-card.revealed .player-card-face:not(.player-card-back) {
+    transform: rotateY(-180deg);
 }
 
 .player-card-back {
     transform: rotateY(180deg);
-    margin-top: -100%;
     justify-items: center;
     align-content: center;
     text-align: center;
+}
+
+.player-card.revealed .player-card-back {
+    transform: rotateY(0deg);
 }
 
 .vote-placeholder {
