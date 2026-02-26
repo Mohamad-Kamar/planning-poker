@@ -1,4 +1,5 @@
 import { VOTE_VALUES, state } from "./state.js";
+import { sanitizeText } from "./sanitize.js";
 
 const SESSION_STORAGE_KEY = "planningPoker.session";
 const SNAPSHOT_VERSION = 1;
@@ -21,11 +22,11 @@ function normalizeId(value) {
 }
 
 function normalizeName(value, fallback = "") {
-    return String(value || fallback).replace(/\s+/g, " ").trim().slice(0, MAX_NAME_LENGTH);
+    return sanitizeText(value, MAX_NAME_LENGTH, fallback);
 }
 
 function normalizeRoundTitle(value) {
-    return String(value || "").replace(/\s+/g, " ").trim().slice(0, MAX_ROUND_TITLE_LENGTH);
+    return sanitizeText(value, MAX_ROUND_TITLE_LENGTH);
 }
 
 function normalizeVote(value) {

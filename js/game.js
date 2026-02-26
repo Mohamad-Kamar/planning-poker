@@ -136,11 +136,11 @@ export function renderStatsValues(players, revealed) {
     };
 }
 
-export function avg(numbers) {
+function avg(numbers) {
     return numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
 }
 
-export function median(numbers) {
+function median(numbers) {
     const mid = Math.floor(numbers.length / 2);
     if (numbers.length % 2 === 0) {
         return (numbers[mid - 1] + numbers[mid]) / 2;
@@ -148,12 +148,12 @@ export function median(numbers) {
     return numbers[mid];
 }
 
-export function formatNumber(value) {
+function formatNumber(value) {
     const rounded = Math.round(value * 100) / 100;
     return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
 }
 
-export function hasConsensus(votes) {
+function hasConsensus(votes) {
     if (!votes.length) return false;
     const first = votes[0];
     return votes.every((vote) => vote === first);

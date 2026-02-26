@@ -56,19 +56,19 @@ export async function decodeSignalCode(code) {
     return payload;
 }
 
-export async function compressBytes(inputBytes) {
+async function compressBytes(inputBytes) {
     const stream = new Blob([inputBytes]).stream().pipeThrough(new CompressionStream("deflate"));
     const buffer = await new Response(stream).arrayBuffer();
     return new Uint8Array(buffer);
 }
 
-export async function decompressBytes(inputBytes) {
+async function decompressBytes(inputBytes) {
     const stream = new Blob([inputBytes]).stream().pipeThrough(new DecompressionStream("deflate"));
     const buffer = await new Response(stream).arrayBuffer();
     return new Uint8Array(buffer);
 }
 
-export function bytesToBase64Url(bytes) {
+function bytesToBase64Url(bytes) {
     let binary = "";
     const chunk = 0x8000;
     for (let i = 0; i < bytes.length; i += chunk) {
@@ -78,7 +78,7 @@ export function bytesToBase64Url(bytes) {
     return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-export function base64UrlToBytes(base64url) {
+function base64UrlToBytes(base64url) {
     const normalized = base64url.replace(/-/g, "+").replace(/_/g, "/");
     const padded = normalized + "=".repeat((4 - (normalized.length % 4 || 4)) % 4);
     const binary = atob(padded);

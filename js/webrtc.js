@@ -2,6 +2,7 @@ import { state } from "./state.js";
 import { els, setSignalCodeDisplay, showNotice, updateConnectionStatus } from "./ui.js";
 import { log } from "./log.js";
 import { getIceServers } from "./ice-config.js";
+import { EMPTY_GUEST_JOIN_CODE_DISPLAY, EMPTY_HOST_RESPONSE_CODE_DISPLAY } from "./signal-display-presets.js";
 
 const ICE_GATHERING_TIMEOUT_MS = 10_000;
 const ICE_RESTART_MAX_ATTEMPTS = 2;
@@ -243,10 +244,10 @@ export function shutdownHost(noticeMessage) {
         els.hostResponseCode,
         els.hostResponseCodeMeta,
         els.hostResponseCodeQuality,
-        "",
-        "No response code yet.",
-        "Waiting for guest join code.",
-        "Shareability: waiting for code"
+        EMPTY_HOST_RESPONSE_CODE_DISPLAY.rawCode,
+        EMPTY_HOST_RESPONSE_CODE_DISPLAY.emptyText,
+        EMPTY_HOST_RESPONSE_CODE_DISPLAY.emptyMetaText,
+        EMPTY_HOST_RESPONSE_CODE_DISPLAY.emptyQualityText
     );
     els.copyHostResponseCodeBtn.disabled = true;
     els.copyHostResponseCodeFormattedBtn.disabled = true;
@@ -266,10 +267,10 @@ export function shutdownGuest(noticeMessage) {
         els.guestJoinCode,
         els.guestJoinCodeMeta,
         els.guestJoinCodeQuality,
-        "",
-        "Generating code...",
-        "Preparing connection details.",
-        "Shareability: waiting for code"
+        EMPTY_GUEST_JOIN_CODE_DISPLAY.rawCode,
+        EMPTY_GUEST_JOIN_CODE_DISPLAY.emptyText,
+        EMPTY_GUEST_JOIN_CODE_DISPLAY.emptyMetaText,
+        EMPTY_GUEST_JOIN_CODE_DISPLAY.emptyQualityText
     );
     els.copyGuestJoinCodeBtn.disabled = true;
     els.copyGuestJoinCodeFormattedBtn.disabled = true;

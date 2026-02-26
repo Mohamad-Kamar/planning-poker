@@ -67,7 +67,7 @@ export function descriptionFromCompact(compact) {
     };
 }
 
-export function parseCandidate(raw) {
+function parseCandidate(raw) {
     const parts = raw.trim().split(/\s+/);
     if (parts.length < 8) return null;
     const typeIndex = parts.indexOf("typ");
@@ -105,7 +105,7 @@ export function parseCandidate(raw) {
     };
 }
 
-export function buildCandidateLine(candidate) {
+function buildCandidateLine(candidate) {
     const base = [
         candidate.f || "0",
         String(candidate.c || 1),
@@ -123,7 +123,7 @@ export function buildCandidateLine(candidate) {
     return base.join(" ");
 }
 
-export function formatFingerprint(noColonHex) {
+function formatFingerprint(noColonHex) {
     const hex = String(noColonHex || "").replace(/[^0-9a-f]/gi, "").toUpperCase();
     const chunks = [];
     for (let i = 0; i < hex.length; i += 2) {
@@ -132,7 +132,7 @@ export function formatFingerprint(noColonHex) {
     return chunks.join(":");
 }
 
-export function normalizeSetup(type) {
+function normalizeSetup(type) {
     if (type === "offer") return "actpass";
     if (type === "answer") return "active";
     return "actpass";

@@ -206,41 +206,17 @@ test("guest relay timeout shows terminal error notice", async ({ page }) => {
 test("mqtt relay channel works with mocked websocket transport", async ({ page }) => {
     await openHome(page);
 
-    const result = await page.evaluate(async () => {
+    const result = await page.evaluate(async ({ fnSources }) => {
+        const makeFn = (source) => eval(`(${source})`);
+        const encodeRemainingLength = makeFn(fnSources.encodeRemainingLength);
+        const packet = makeFn(fnSources.packet);
+        const buildConnack = makeFn(fnSources.buildConnack);
+        const buildSuback = makeFn(fnSources.buildSuback);
+        void encodeRemainingLength;
+        void packet;
         const originalWebSocket = window.WebSocket;
         const OPEN = 1;
         const sentPacketTypes = [];
-
-        function encodeRemainingLength(length) {
-            const bytes = [];
-            let value = length;
-            do {
-                let digit = value % 128;
-                value = Math.floor(value / 128);
-                if (value > 0) digit |= 0x80;
-                bytes.push(digit);
-            } while (value > 0);
-            return Uint8Array.from(bytes);
-        }
-
-        function packet(typeAndFlags, body) {
-            const payload = body || new Uint8Array(0);
-            const header = Uint8Array.from([typeAndFlags]);
-            const remaining = encodeRemainingLength(payload.length);
-            const output = new Uint8Array(header.length + remaining.length + payload.length);
-            output.set(header, 0);
-            output.set(remaining, header.length);
-            output.set(payload, header.length + remaining.length);
-            return output;
-        }
-
-        function buildSuback(packetIdMsb, packetIdLsb) {
-            return packet(0x90, Uint8Array.from([packetIdMsb, packetIdLsb, 0x00]));
-        }
-
-        function buildConnack() {
-            return packet(0x20, Uint8Array.from([0x00, 0x00]));
-        }
 
         class FakeWebSocket {
             static OPEN = OPEN;
@@ -316,7 +292,7 @@ test("mqtt relay channel works with mocked websocket transport", async ({ page }
         } finally {
             window.WebSocket = originalWebSocket;
         }
-    });
+    }, { fnSources: mockFunctionSources() });
 
     expect(result.sawConnectPacket).toBe(true);
     expect(result.sawSubscribePacket).toBe(true);

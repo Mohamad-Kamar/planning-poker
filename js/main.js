@@ -45,6 +45,8 @@ import {
 } from "./guest.js";
 import { shutdownGuest, shutdownHost } from "./webrtc.js";
 import { clearSessionSnapshot, loadSessionSnapshot, saveSessionSnapshot } from "./persistence.js";
+import { EMPTY_GUEST_JOIN_CODE_DISPLAY, EMPTY_HOST_RESPONSE_CODE_DISPLAY } from "./signal-display-presets.js";
+import { sanitizeText } from "./sanitize.js";
 
 init();
 
@@ -78,19 +80,19 @@ function init() {
         els.guestJoinCode,
         els.guestJoinCodeMeta,
         els.guestJoinCodeQuality,
-        "",
-        "Generating code...",
-        "Preparing connection details.",
-        "Shareability: waiting for code"
+        EMPTY_GUEST_JOIN_CODE_DISPLAY.rawCode,
+        EMPTY_GUEST_JOIN_CODE_DISPLAY.emptyText,
+        EMPTY_GUEST_JOIN_CODE_DISPLAY.emptyMetaText,
+        EMPTY_GUEST_JOIN_CODE_DISPLAY.emptyQualityText
     );
     setSignalCodeDisplay(
         els.hostResponseCode,
         els.hostResponseCodeMeta,
         els.hostResponseCodeQuality,
-        "",
-        "No response code yet.",
-        "Waiting for guest join code.",
-        "Shareability: waiting for code"
+        EMPTY_HOST_RESPONSE_CODE_DISPLAY.rawCode,
+        EMPTY_HOST_RESPONSE_CODE_DISPLAY.emptyText,
+        EMPTY_HOST_RESPONSE_CODE_DISPLAY.emptyMetaText,
+        EMPTY_HOST_RESPONSE_CODE_DISPLAY.emptyQualityText
     );
 
     const restored = restoreSessionFromSnapshot(loadSessionSnapshot());
@@ -106,8 +108,16 @@ function init() {
 }
 
 function wireEvents() {
+    wireHostEvents();
+    wireGuestEvents();
+    wireTableEvents();
+    wireProfileAndLifecycleEvents();
+    wireSettingsEvents();
+    wireKeyboardEvents();
+}
+
+function wireHostEvents() {
     els.createRoomBtn.addEventListener("click", onCreateRoom);
-    els.joinRoomBtn.addEventListener("click", onJoinRoom);
     els.acceptGuestBtn.addEventListener("click", onAcceptGuestCode);
     els.clearHostJoinCodeBtn.addEventListener("click", () => {
         els.hostIncomingJoinCode.value = "";
@@ -149,7 +159,10 @@ function wireEvents() {
         clearSessionSnapshot();
         showView("home");
     });
+}
 
+function wireGuestEvents() {
+    els.joinRoomBtn.addEventListener("click", onJoinRoom);
     els.copyGuestJoinCodeBtn.addEventListener("click", async () => {
         await copyTextWithFeedback(state.guestJoinCodeRaw, els.copyGuestJoinCodeBtn, "Copied");
     });
@@ -164,7 +177,9 @@ function wireEvents() {
         clearSessionSnapshot();
         showView("home");
     });
+}
 
+function wireTableEvents() {
     els.leaveSessionBtn.addEventListener("click", onLeaveOrBack);
     els.clearVoteBtn.addEventListener("click", () => {
         setLocalVote(null, {
@@ -182,6 +197,9 @@ function wireEvents() {
     els.hostRoundTitleInput.addEventListener("input", () => {
         onHostRoundTitleChange(els.hostRoundTitleInput.value);
     });
+}
+
+function wireProfileAndLifecycleEvents() {
     els.displayNameInput.addEventListener("input", () => {
         state.displayName = sanitizeName(els.displayNameInput.value);
         storeDisplayName(state.displayName);
@@ -189,6 +207,9 @@ function wireEvents() {
         saveSessionSnapshot();
     });
     window.addEventListener("pagehide", onPageHide);
+}
+
+function wireSettingsEvents() {
     if (els.iceSettingsBtn) {
         els.iceSettingsBtn.addEventListener("click", openIceSettingsDialog);
     }
@@ -208,7 +229,9 @@ function wireEvents() {
             els.iceSettingsDialog.close();
         });
     }
+}
 
+function wireKeyboardEvents() {
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
             if (state.currentView === "guestConnect") {
@@ -380,10 +403,10 @@ function restoreHostSnapshot(snapshot) {
         els.hostResponseCode,
         els.hostResponseCodeMeta,
         els.hostResponseCodeQuality,
-        "",
-        "No response code yet.",
-        "Waiting for guest join code.",
-        "Shareability: waiting for code"
+        EMPTY_HOST_RESPONSE_CODE_DISPLAY.rawCode,
+        EMPTY_HOST_RESPONSE_CODE_DISPLAY.emptyText,
+        EMPTY_HOST_RESPONSE_CODE_DISPLAY.emptyMetaText,
+        EMPTY_HOST_RESPONSE_CODE_DISPLAY.emptyQualityText
     );
     renderHostLobby();
     startHostRecoveryRelayListener();
@@ -429,10 +452,10 @@ function restoreGuestSnapshot(snapshot) {
         els.guestJoinCode,
         els.guestJoinCodeMeta,
         els.guestJoinCodeQuality,
-        "",
-        "Generating code...",
-        "Preparing connection details.",
-        "Shareability: waiting for code"
+        EMPTY_GUEST_JOIN_CODE_DISPLAY.rawCode,
+        EMPTY_GUEST_JOIN_CODE_DISPLAY.emptyText,
+        EMPTY_GUEST_JOIN_CODE_DISPLAY.emptyMetaText,
+        EMPTY_GUEST_JOIN_CODE_DISPLAY.emptyQualityText
     );
     updateConnectionStatus(false, "Disconnected");
 
@@ -454,7 +477,7 @@ function isGuestConnected() {
 }
 
 export function sanitizeName(name) {
-    return String(name || "").replace(/\s+/g, " ").trim().slice(0, 40);
+    return sanitizeText(name, 40);
 }
 
 export function storeDisplayName(name) {

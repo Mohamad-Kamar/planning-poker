@@ -19,6 +19,31 @@
     --radius-lg: 12px;
     --radius-md: 8px;
     --radius-sm: 6px;
+    --white: #ffffff;
+    --surface-muted: #fafafa;
+    --surface-subtle: #fbfbfc;
+    --surface-secondary: #f3f4f6;
+    --surface-info: #e7f0ff;
+    --surface-accent: #eef4ff;
+    --surface-accent-strong: #dbeafe;
+    --surface-success: #dcfce7;
+    --surface-warning: #fff4dd;
+    --surface-warning-soft: #fef3c7;
+    --surface-danger: #fee2e2;
+    --surface-danger-hover: #fecaca;
+    --text-info: #184b9c;
+    --text-accent: #1b4ea3;
+    --text-accent-strong: #0b4ab3;
+    --text-success: #1a7f37;
+    --text-success-strong: #166534;
+    --text-warning: #8a5a00;
+    --text-warning-strong: #92400e;
+    --text-danger: #991b1b;
+    --text-danger-strong: #9b1c1c;
+    --status-offline: #9ca3af;
+    --status-online: #10b981;
+    --secondary-btn: #e7e7ea;
+    --secondary-btn-hover: #d5d5da;
 }
 
 body {
@@ -109,7 +134,7 @@ textarea {
     font-size: 14px;
     padding: 10px 12px;
     outline: none;
-    background: #fff;
+    background: var(--white);
 }
 
 input[type="text"]:focus,
@@ -129,7 +154,7 @@ textarea.code-box {
     min-height: 120px;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    background: #fafafa;
+    background: var(--surface-muted);
     padding: 12px;
     font-family: "SF Mono", Monaco, "Courier New", monospace;
     font-size: 12px;
@@ -153,18 +178,18 @@ textarea.code-box {
 }
 
 .quality-short {
-    background: #dcfce7;
-    color: #166534;
+    background: var(--surface-success);
+    color: var(--text-success-strong);
 }
 
 .quality-medium {
-    background: #fef3c7;
-    color: #92400e;
+    background: var(--surface-warning-soft);
+    color: var(--text-warning-strong);
 }
 
 .quality-long {
-    background: #fee2e2;
-    color: #991b1b;
+    background: var(--surface-danger);
+    color: var(--text-danger);
 }
 
 .row {
@@ -219,7 +244,7 @@ textarea.code-box {
 
 .btn-primary {
     background: var(--primary);
-    color: #fff;
+    color: var(--white);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -227,29 +252,29 @@ textarea.code-box {
 }
 
 .btn-secondary {
-    background: #e7e7ea;
+    background: var(--secondary-btn);
     color: var(--text);
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background: #d5d5da;
+    background: var(--secondary-btn-hover);
 }
 
 .btn-danger {
-    background: #fee2e2;
-    color: #9b1c1c;
+    background: var(--surface-danger);
+    color: var(--text-danger-strong);
 }
 
 .btn-danger:hover:not(:disabled) {
-    background: #fecaca;
+    background: var(--surface-danger-hover);
 }
 
 .chip {
     font-size: 12px;
     padding: 4px 8px;
     border-radius: 999px;
-    background: #eef4ff;
-    color: #1b4ea3;
+    background: var(--surface-accent);
+    color: var(--text-accent);
     font-weight: 600;
 }
 
@@ -257,7 +282,7 @@ textarea.code-box {
     font-size: 12px;
     padding: 6px 10px;
     border-radius: 999px;
-    background: #f3f4f6;
+    background: var(--surface-secondary);
     color: var(--muted);
     white-space: nowrap;
     max-width: 260px;
@@ -281,22 +306,22 @@ textarea.code-box {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #9ca3af;
+    background: var(--status-offline);
 }
 
 .status-dot.online {
-    background: #10b981;
+    background: var(--status-online);
 }
 
 .status-dot.offline {
-    background: #9ca3af;
+    background: var(--status-offline);
 }
 
 .panel {
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 16px;
-    background: #fff;
+    background: var(--white);
 }
 
 .panel-heading {
@@ -330,7 +355,7 @@ textarea.code-box {
     justify-content: space-between;
     align-items: center;
     gap: 10px;
-    background: #fff;
+    background: var(--white);
 }
 
 .player-row-actions {
@@ -365,18 +390,18 @@ textarea.code-box {
     color: var(--muted);
     padding: 6px 10px;
     border-radius: 999px;
-    background: #f3f4f6;
+    background: var(--surface-secondary);
 }
 
 .step.active {
-    color: #0b4ab3;
-    background: #dbeafe;
+    color: var(--text-accent-strong);
+    background: var(--surface-accent-strong);
     font-weight: 600;
 }
 
 .step.completed {
-    color: #1a7f37;
-    background: #dcfce7;
+    color: var(--text-success);
+    background: var(--surface-success);
     font-weight: 600;
 }
 
@@ -399,7 +424,7 @@ textarea.code-box {
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 8px 10px;
-    background: #fbfbfc;
+    background: var(--surface-subtle);
 }
 
 .stat-key {
@@ -424,7 +449,7 @@ textarea.code-box {
 .player-card {
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    background: #fff;
+    background: var(--white);
     min-height: 130px;
     position: relative;
     overflow: hidden;
@@ -497,7 +522,7 @@ textarea.code-box {
     place-items: center;
     font-size: 20px;
     font-weight: 700;
-    background: #fff;
+    background: var(--white);
     cursor: pointer;
     transition: all 0.16s ease;
     user-select: none;
@@ -515,7 +540,7 @@ textarea.code-box {
 .vote-card.selected {
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.18);
-    color: #0b4ab3;
+    color: var(--text-accent-strong);
     transform: translateY(-2px);
 }
 
@@ -539,24 +564,18 @@ textarea.code-box {
 }
 
 .notice.info {
-    background: #e7f0ff;
-    color: #184b9c;
+    background: var(--surface-info);
+    color: var(--text-info);
 }
 
 .notice.warn {
-    background: #fff4dd;
-    color: #8a5a00;
+    background: var(--surface-warning);
+    color: var(--text-warning);
 }
 
 .notice.error {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-.footer-nav {
-    margin-top: 12px;
-    display: flex;
-    justify-content: flex-end;
+    background: var(--surface-danger);
+    color: var(--text-danger);
 }
 
 .mono {
@@ -580,8 +599,18 @@ textarea.code-box {
     display: grid;
     gap: 16px;
     padding: 20px;
-    background: #fff;
+    background: var(--white);
     border-radius: var(--radius-lg);
+}
+
+.pending-rejoin-panel {
+    display: none;
+    margin-top: 12px;
+}
+
+.host-round-title-input {
+    display: none;
+    margin-top: 8px;
 }
 
 @media (max-width: 900px) {

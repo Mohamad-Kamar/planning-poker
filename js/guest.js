@@ -15,6 +15,8 @@ import { els, setGuestStep, setSignalCodeDisplay, showNotice, showView, updateCo
 import { renderTable } from "./render.js";
 import { createMqttRelayChannel } from "./mqtt-relay.js";
 import { clearSessionSnapshot, saveSessionSnapshot } from "./persistence.js";
+import { sendJson } from "./messaging.js";
+import { EMPTY_GUEST_JOIN_CODE_DISPLAY } from "./signal-display-presets.js";
 
 const RELAY_FALLBACK_DELAY_MS = 2500;
 const REJOIN_ACK_TIMEOUT_MS = 4500;
@@ -63,10 +65,10 @@ export async function onRegenerateGuestOffer() {
             els.guestJoinCode,
             els.guestJoinCodeMeta,
             els.guestJoinCodeQuality,
-            "",
-            "Generating code...",
-            "Preparing connection details.",
-            "Shareability: waiting for code"
+            EMPTY_GUEST_JOIN_CODE_DISPLAY.rawCode,
+            EMPTY_GUEST_JOIN_CODE_DISPLAY.emptyText,
+            EMPTY_GUEST_JOIN_CODE_DISPLAY.emptyMetaText,
+            EMPTY_GUEST_JOIN_CODE_DISPLAY.emptyQualityText
         );
         saveSessionSnapshot();
         await createGuestOfferCode();
@@ -573,11 +575,4 @@ export function handleGuestInboundMessage(rawData, channel) {
     }
 }
 
-export function sendJson(channel, message) {
-    try {
-        channel.send(JSON.stringify(message));
-        log.info("game", "Message sent", { role: "guest", type: message.t || "unknown" });
-    } catch (_error) {
-        // Ignore stale channel sends.
-    }
-}
+export { sendJson } from "./messaging.js";
