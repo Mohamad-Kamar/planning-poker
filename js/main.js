@@ -25,6 +25,7 @@ import {
     configureHost,
     broadcastState,
     onAcceptGuestCode,
+    onKickGuest,
     onHostNewRound,
     onHostRoundTitleChange,
     onHostRevealVotes,
@@ -111,6 +112,15 @@ function wireEvents() {
     els.clearHostJoinCodeBtn.addEventListener("click", () => {
         els.hostIncomingJoinCode.value = "";
     });
+    if (els.hostPlayerList) {
+        els.hostPlayerList.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            const guestId = target.getAttribute("data-kick-player");
+            if (!guestId) return;
+            onKickGuest(guestId);
+        });
+    }
     if (els.hostPendingRejoinList) {
         els.hostPendingRejoinList.addEventListener("click", (event) => {
             const target = event.target;

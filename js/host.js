@@ -21,6 +21,7 @@ let sanitizeNameFn = (name) => String(name || "").trim();
 const RELAY_FALLBACK_DELAY_MS = 2500;
 const ROUND_TITLE_MAX_LENGTH = 80;
 const PENDING_REJOIN_MAX = 12;
+const KICK_DISCONNECT_DELAY_MS = 120;
 
 export function configureHost(deps) {
     if (deps && typeof deps.sanitizeName === "function") {
@@ -250,6 +251,49 @@ export function rejectPendingRejoin(guestId) {
     renderHostLobby();
     renderTable();
     saveSessionSnapshot();
+}
+
+export function onKickGuest(guestId) {
+    if (state.role !== "host" || !state.session) return;
+    const normalizedGuestId = String(guestId || "").trim();
+    if (!normalizedGuestId || normalizedGuestId === state.localId) return;
+
+    const player = state.session.players[normalizedGuestId];
+    const peer = state.hostPeers.get(normalizedGuestId);
+    if (!player && !peer) return;
+
+    const guestName = sanitizeNameFn((player && player.name) || (peer && peer.name) || "Guest");
+    let delayedDisconnect = false;
+    if (peer && peer.dc && peer.dc.readyState === "open") {
+        sendJson(peer.dc, {
+            t: "kicked",
+            to: normalizedGuestId,
+            reason: "Removed by host."
+        });
+        const kickedChannel = peer.dc;
+        delayedDisconnect = true;
+        setTimeout(() => {
+            onPeerChannelClose(normalizedGuestId, kickedChannel);
+        }, KICK_DISCONNECT_DELAY_MS);
+    }
+
+    if (peer && !delayedDisconnect) {
+        onPeerChannelClose(normalizedGuestId, peer.dc);
+    } else if (!peer) {
+        removeHostPlayer(normalizedGuestId);
+        clearPendingRejoin(normalizedGuestId);
+        broadcastState();
+        renderHostLobby();
+        renderTable();
+    }
+
+    const noticeText = guestName + " was removed from the session.";
+    if (state.currentView === "table") {
+        showNotice(els.tableNotice, noticeText, "info", 1800);
+    } else {
+        showNotice(els.hostLobbyNotice, noticeText, "info", 1800);
+    }
+    log.info("host", "Guest kicked", { guestId: normalizedGuestId, guestName });
 }
 
 export function onHostStartGame() {

@@ -15,12 +15,18 @@ export function renderHostLobby() {
         const roleTag = player.isHost ? "Host" : "Guest";
         const votedText = player.vote == null ? "Not voted" : "Voted";
         const dotClass = player.connected ? "online" : "offline";
+        const kickButton = player.isHost
+            ? ""
+            : `<button class="btn btn-danger btn-small" data-kick-player="${escapeHtml(player.id)}">Kick</button>`;
         return `<div class="player-row">
             <div>
                 <div class="player-name">${escapeHtml(player.name)}</div>
                 <div class="player-meta">${roleTag} • ${votedText}</div>
             </div>
-            <span class="status"><span class="status-dot ${dotClass}"></span>${player.connected ? "Online" : "Offline"}</span>
+            <div class="row player-row-actions">
+                <span class="status"><span class="status-dot ${dotClass}"></span>${player.connected ? "Online" : "Offline"}</span>
+                ${kickButton}
+            </div>
         </div>`;
     }).join("");
 

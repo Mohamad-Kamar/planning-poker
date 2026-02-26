@@ -115,6 +115,29 @@ test("remaining guests receive disconnect updates", async ({ browser }) => {
 
 });
 
+test("host can kick a guest from lobby", async ({ browser }) => {
+    test.setTimeout(90_000);
+    const context = await browser.newContext();
+    const host = await context.newPage();
+    const guest = await context.newPage();
+
+    await openHome(host);
+    await openHome(guest);
+    await createHost(host, "HostKick");
+    const guestConnection = await connectGuestToHost(host, guest, "GuestKick");
+    test.skip(!guestConnection.connected, "WebRTC data channel did not open in this environment.");
+
+    const guestRow = host.locator("#hostPlayerList .player-row", { hasText: "GuestKick" });
+    const kickButton = guestRow.getByRole("button", { name: "Kick" });
+    await expect(kickButton).toBeVisible();
+    await kickButton.click();
+
+    await expect(host.locator("#hostPlayerList .player-row", { hasText: "GuestKick" })).toHaveCount(0, { timeout: 12_000 });
+    await expect(host.locator("#hostStartGameBtn")).toBeDisabled();
+    await expect(guest.locator("#homeView.active")).toBeVisible({ timeout: 12_000 });
+    await expect(guest.locator("#homeNotice")).toContainText("Removed by host", { timeout: 12_000 });
+});
+
 test("strict host and guest happy path requires live guest connection", async ({ browser }) => {
     test.setTimeout(90_000);
     const context = await browser.newContext();

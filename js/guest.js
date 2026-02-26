@@ -14,7 +14,7 @@ import {
 import { els, setGuestStep, setSignalCodeDisplay, showNotice, showView, updateConnectionStatus } from "./ui.js";
 import { renderTable } from "./render.js";
 import { createMqttRelayChannel } from "./mqtt-relay.js";
-import { saveSessionSnapshot } from "./persistence.js";
+import { clearSessionSnapshot, saveSessionSnapshot } from "./persistence.js";
 
 const RELAY_FALLBACK_DELAY_MS = 2500;
 const REJOIN_ACK_TIMEOUT_MS = 4500;
@@ -466,6 +466,18 @@ export function handleGuestInboundMessage(rawData, channel) {
             scheduleGuestAutoRejoin("rejected");
         }
         saveSessionSnapshot();
+        return;
+    }
+
+    if (message.t === "kicked") {
+        if (message.to && message.to !== state.localId) return;
+        if (!message.to && channel && channel.transportType === "mqtt-relay") return;
+        const reason = typeof message.reason === "string" && message.reason.trim()
+            ? message.reason.trim()
+            : "Removed by host.";
+        showView("home");
+        shutdownGuest(reason);
+        clearSessionSnapshot();
         return;
     }
 

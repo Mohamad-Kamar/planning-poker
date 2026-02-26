@@ -27,6 +27,7 @@ Legend:
 | Copy response code formatted | host | Covered | `journeys.codes.spec.js` |
 | Start game disabled until guest online | host | Covered | `game-lifecycle.spec.js` |
 | Start game with real gating | host | Covered | `game-lifecycle.spec.js` |
+| Kick guest from lobby | host | Covered | `game-lifecycle.spec.js` |
 | Back to home | host | Covered | `journeys.navigation.spec.js` |
 | Escape to home | host | Covered | `interaction-and-errors.spec.js` |
 | Approve/reject pending rejoin | host | Covered | `persistence.spec.js`, `resilience.rejoin.spec.js` |

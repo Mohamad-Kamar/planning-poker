@@ -198,6 +198,12 @@ textarea.code-box {
     white-space: nowrap;
 }
 
+.btn-small {
+    min-height: 32px;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
 .btn:active:not(:disabled) {
     transform: translateY(1px);
 }
@@ -325,6 +331,10 @@ textarea.code-box {
     align-items: center;
     gap: 10px;
     background: #fff;
+}
+
+.player-row-actions {
+    justify-content: flex-end;
 }
 
 .player-name {

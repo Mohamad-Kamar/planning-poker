@@ -7,6 +7,7 @@ Browser-only planning poker app with no backend.
 - Host/guest flow with manual join and response codes.
 - Real-time updates over WebRTC DataChannels.
 - Multiple guests per host session.
+- Host can remove a guest from the session.
 - Automatic fallback to MQTT relay when direct peer connection fails.
 - Session snapshot restore after refresh in the same tab.
 - Built-in Playwright E2E tests.
