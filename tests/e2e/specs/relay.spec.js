@@ -93,7 +93,20 @@ test("guest fallback starts after first failed state without waiting for second 
             fakePc.connectionState = "failed";
             fakePc.onconnectionstatechange();
 
-            await new Promise((resolve) => setTimeout(resolve, 3200));
+            await new Promise((resolve, reject) => {
+                const started = Date.now();
+                const timer = setInterval(() => {
+                    if (websocketCreates > 0 && restartCalls > 0) {
+                        clearInterval(timer);
+                        resolve();
+                        return;
+                    }
+                    if (Date.now() - started > 8_000) {
+                        clearInterval(timer);
+                        reject(new Error("Guest fallback did not trigger relay setup in time."));
+                    }
+                }, 25);
+            });
             return {
                 websocketCreates,
                 restartCalls,
@@ -166,7 +179,21 @@ test("guest relay timeout shows terminal error notice", async ({ page }) => {
             fakePc.connectionState = "failed";
             fakePc.onconnectionstatechange();
 
-            await new Promise((resolve) => setTimeout(resolve, 14_000));
+            await new Promise((resolve, reject) => {
+                const started = Date.now();
+                const timer = setInterval(() => {
+                    const notice = String(els.guestConnectNotice.textContent || "");
+                    if (notice.includes("Relay fallback failed")) {
+                        clearInterval(timer);
+                        resolve();
+                        return;
+                    }
+                    if (Date.now() - started > 20_000) {
+                        clearInterval(timer);
+                        reject(new Error("Relay timeout notice did not appear in time."));
+                    }
+                }, 25);
+            });
             return String(els.guestConnectNotice.textContent || "");
         } finally {
             window.WebSocket = originalWebSocket;

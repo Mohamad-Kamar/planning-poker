@@ -218,7 +218,20 @@ test("guest table disconnect starts auto-rejoin loop", async ({ page }) => {
             };
             state.guestChannel = fakeChannel;
             onHostChannelClose(fakeChannel);
-            await new Promise((resolve) => setTimeout(resolve, 1200));
+            await new Promise((resolve, reject) => {
+                const started = Date.now();
+                const timer = setInterval(() => {
+                    if (websocketCreates > 0) {
+                        clearInterval(timer);
+                        resolve();
+                        return;
+                    }
+                    if (Date.now() - started > 8_000) {
+                        clearInterval(timer);
+                        reject(new Error("Auto-rejoin relay setup did not start in time."));
+                    }
+                }, 25);
+            });
 
             return {
                 websocketCreates,

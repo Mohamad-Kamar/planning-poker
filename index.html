@@ -20,7 +20,7 @@
         </div>
 
         <main>
-            <section id="homeView" class="view active">
+            <section id="homeView" class="view active" data-testid="view-home">
                 <div class="stack-lg">
                     <div>
                         <div class="panel-heading">Start Session</div>
@@ -29,19 +29,19 @@
 
                     <div class="stack">
                         <label class="field-label" for="displayNameInput">Display Name</label>
-                        <input id="displayNameInput" type="text" maxlength="40" placeholder="Your name">
+                        <input id="displayNameInput" data-testid="input-display-name" type="text" maxlength="40" placeholder="Your name">
                     </div>
 
                     <div class="row">
-                        <button id="createRoomBtn" class="btn btn-primary">Create Room</button>
-                        <button id="joinRoomBtn" class="btn btn-secondary">Join Room</button>
+                        <button id="createRoomBtn" data-testid="btn-create-room" class="btn btn-primary">Create Room</button>
+                        <button id="joinRoomBtn" data-testid="btn-join-room" class="btn btn-secondary">Join Room</button>
                     </div>
 
                     <div id="homeNotice" class="notice info"></div>
                 </div>
             </section>
 
-            <section id="hostLobbyView" class="view">
+            <section id="hostLobbyView" class="view" data-testid="view-host-lobby">
                 <div class="stack-lg">
                     <div class="row-between">
                         <div>
@@ -66,20 +66,20 @@
                                 <div class="panel-heading">Add Player</div>
                                 <div class="panel-note">Paste one guest code at a time, click Accept, then share the generated response code.</div>
                             </div>
-                            <textarea id="hostIncomingJoinCode" class="code-box" placeholder="Paste guest join code"></textarea>
+                            <textarea id="hostIncomingJoinCode" data-testid="input-host-join-code" class="code-box" placeholder="Paste guest join code"></textarea>
                             <div class="row">
-                                <button id="acceptGuestBtn" class="btn btn-primary">Accept Guest</button>
-                                <button id="clearHostJoinCodeBtn" class="btn btn-secondary">Clear</button>
+                                <button id="acceptGuestBtn" data-testid="btn-accept-guest" class="btn btn-primary">Accept Guest</button>
+                                <button id="clearHostJoinCodeBtn" data-testid="btn-clear-host-join-code" class="btn btn-secondary">Clear</button>
                             </div>
 
                             <div class="stack">
                                 <label class="field-label">Response Code (send to guest)</label>
-                                <div id="hostResponseCode" class="code-display mono">No response code yet.</div>
+                                <div id="hostResponseCode" data-testid="code-host-response" class="code-display mono">No response code yet.</div>
                                 <div id="hostResponseCodeMeta" class="code-meta">Waiting for guest join code.</div>
                                 <div id="hostResponseCodeQuality" class="code-quality quality-medium">Shareability: waiting for code</div>
                                 <div class="row">
-                                    <button id="copyHostResponseCodeBtn" class="btn btn-secondary">Copy Plain</button>
-                                    <button id="copyHostResponseCodeFormattedBtn" class="btn btn-secondary">Copy Formatted</button>
+                                    <button id="copyHostResponseCodeBtn" data-testid="btn-copy-host-response-plain" class="btn btn-secondary">Copy Plain</button>
+                                    <button id="copyHostResponseCodeFormattedBtn" data-testid="btn-copy-host-response-formatted" class="btn btn-secondary">Copy Formatted</button>
                                 </div>
                             </div>
                             <div id="hostLobbyNotice" class="notice info"></div>
@@ -87,13 +87,13 @@
                     </div>
 
                     <div class="row-between">
-                        <button id="hostStartGameBtn" class="btn btn-primary" disabled>Start Game</button>
-                        <button id="hostBackHomeBtn" class="btn btn-secondary">Back</button>
+                        <button id="hostStartGameBtn" data-testid="btn-host-start-game" class="btn btn-primary" disabled>Start Game</button>
+                        <button id="hostBackHomeBtn" data-testid="btn-host-back-home" class="btn btn-secondary">Back</button>
                     </div>
                 </div>
             </section>
 
-            <section id="guestConnectView" class="view">
+            <section id="guestConnectView" class="view" data-testid="view-guest-connect">
                 <div class="stack-lg">
                     <div class="row-between">
                         <div>
@@ -111,22 +111,22 @@
 
                     <div class="panel stack">
                         <label class="field-label">Your Join Code</label>
-                        <div id="guestJoinCode" class="code-display mono">Generating code...</div>
+                        <div id="guestJoinCode" data-testid="code-guest-join" class="code-display mono">Generating code...</div>
                         <div id="guestJoinCodeMeta" class="code-meta">Preparing connection details.</div>
                         <div id="guestJoinCodeQuality" class="code-quality quality-medium">Shareability: waiting for code</div>
                         <div class="row">
-                            <button id="copyGuestJoinCodeBtn" class="btn btn-primary">Copy Plain</button>
-                            <button id="copyGuestJoinCodeFormattedBtn" class="btn btn-secondary">Copy Formatted</button>
-                            <button id="regenerateGuestJoinCodeBtn" class="btn btn-secondary">Regenerate</button>
+                            <button id="copyGuestJoinCodeBtn" data-testid="btn-copy-guest-join-plain" class="btn btn-primary">Copy Plain</button>
+                            <button id="copyGuestJoinCodeFormattedBtn" data-testid="btn-copy-guest-join-formatted" class="btn btn-secondary">Copy Formatted</button>
+                            <button id="regenerateGuestJoinCodeBtn" data-testid="btn-regenerate-guest-join" class="btn btn-secondary">Regenerate</button>
                         </div>
                     </div>
 
                     <div class="panel stack">
                         <label class="field-label" for="guestResponseCodeInput">Host Response Code</label>
-                        <textarea id="guestResponseCodeInput" class="code-box" placeholder="Paste host response code"></textarea>
+                        <textarea id="guestResponseCodeInput" data-testid="input-guest-response-code" class="code-box" placeholder="Paste host response code"></textarea>
                         <div class="row">
-                            <button id="connectGuestBtn" class="btn btn-primary">Connect</button>
-                            <button id="guestBackHomeBtn" class="btn btn-secondary">Back</button>
+                            <button id="connectGuestBtn" data-testid="btn-connect-guest" class="btn btn-primary">Connect</button>
+                            <button id="guestBackHomeBtn" data-testid="btn-guest-back-home" class="btn btn-secondary">Back</button>
                         </div>
                     </div>
 
@@ -134,7 +134,7 @@
                 </div>
             </section>
 
-            <section id="tableView" class="view">
+            <section id="tableView" class="view" data-testid="view-table">
                 <div class="table-layout">
                     <div class="row-between">
                         <div>
@@ -144,7 +144,7 @@
                         </div>
                         <div class="row">
                             <span id="tableRoleChip" class="chip">Guest</span>
-                            <button id="leaveSessionBtn" class="btn btn-danger">Leave</button>
+                            <button id="leaveSessionBtn" data-testid="btn-leave-session" class="btn btn-danger">Leave</button>
                         </div>
                     </div>
 
@@ -165,16 +165,16 @@
                         <div class="panel-heading">Your Vote</div>
                         <div id="votePalette" class="card-palette"></div>
                         <div class="row-between">
-                            <div class="status"><span id="connectionStatusDot" class="status-dot offline"></span><span id="connectionStatusText">Not connected</span></div>
+                            <div class="status"><span id="connectionStatusDot" class="status-dot offline"></span><span id="connectionStatusText" data-testid="text-connection-status">Not connected</span></div>
                             <div class="row">
-                                <button id="clearVoteBtn" class="btn btn-secondary">Clear Vote</button>
-                                <button id="hostRevealBtn" class="btn btn-primary">Reveal</button>
-                                <button id="hostResetBtn" class="btn btn-secondary">New Round</button>
+                                <button id="clearVoteBtn" data-testid="btn-clear-vote" class="btn btn-secondary">Clear Vote</button>
+                                <button id="hostRevealBtn" data-testid="btn-host-reveal" class="btn btn-primary">Reveal</button>
+                                <button id="hostResetBtn" data-testid="btn-host-reset" class="btn btn-secondary">New Round</button>
                             </div>
                         </div>
                     </div>
 
-                    <div id="tableNotice" class="notice info"></div>
+                    <div id="tableNotice" data-testid="notice-table" class="notice info"></div>
                 </div>
             </section>
         </main>

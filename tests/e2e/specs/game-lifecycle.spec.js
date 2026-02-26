@@ -157,19 +157,25 @@ test("host start game button stays disabled until a guest is connected", async (
     await expect(page.locator("#hostStartGameBtn")).toBeDisabled();
 });
 
-test("host-only round interactions work without a guest connection", async ({ page }) => {
-    await openHome(page);
-    await createHost(page, "HostSolo");
-    await startGameFromLobby(page);
+test("host can return to table after game has started", async ({ browser }) => {
+    test.setTimeout(90_000);
+    const context = await browser.newContext();
+    const host = await context.newPage();
+    const guest = await context.newPage();
 
-    await page.locator("#hostRoundTitleInput").fill("Solo Round");
-    await expect(page.locator("#tableSubtitle")).toContainText("Round 1 - Solo Round");
-    await page.locator('#votePalette .vote-card[data-vote="13"]').click();
-    await page.locator("#hostRevealBtn").click();
-    await expect(playerCard(page, "HostSolo")).toHaveClass(/revealed/);
-    await expect(page.locator("#statAverage")).toHaveText("13");
+    await openHome(host);
+    await openHome(guest);
+    await createHost(host, "HostReturn");
+    const guestConnection = await connectGuestToHost(host, guest, "GuestReturn");
+    test.skip(!guestConnection.connected, "WebRTC data channel did not open in this environment.");
 
-    await page.locator("#hostResetBtn").click();
-    await expect(page.locator("#tableSubtitle")).toContainText("Round 2");
-    await expect(page.locator("#tableSubtitle")).not.toContainText("Solo Round");
+    await startGameFromLobbyStrict(host);
+    await expect(host.locator("#tableView.active")).toBeVisible();
+    await host.locator("#leaveSessionBtn").click();
+
+    await expect(host.locator("#hostLobbyView.active")).toBeVisible();
+    await expect(host.locator("#hostStartGameBtn")).toBeEnabled();
+    await expect(host.locator("#hostStartGameBtn")).toHaveText("Return to Table");
+    await host.locator("#hostStartGameBtn").click();
+    await expect(host.locator("#tableView.active")).toBeVisible();
 });

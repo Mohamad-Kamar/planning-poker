@@ -9,10 +9,17 @@ jobs:
   e2e:
     name: E2E (${{ matrix.browser }})
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, firefox]
+        include:
+          - browser: chromium
+            experimental: false
+          - browser: firefox
+            experimental: false
+          - browser: webkit
+            experimental: true
 
     steps:
       - name: Checkout
