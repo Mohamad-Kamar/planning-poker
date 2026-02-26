@@ -11,6 +11,7 @@ export const els = {
     displayNameInput: document.getElementById("displayNameInput"),
     createRoomBtn: document.getElementById("createRoomBtn"),
     joinRoomBtn: document.getElementById("joinRoomBtn"),
+    currentUserBadge: document.getElementById("currentUserBadge"),
     homeNotice: document.getElementById("homeNotice"),
     hostPlayerList: document.getElementById("hostPlayerList"),
     hostIncomingJoinCode: document.getElementById("hostIncomingJoinCode"),
@@ -98,6 +99,18 @@ export function updateConnectionStatus(isOnline, text) {
     els.connectionStatusDot.classList.toggle("online", isOnline);
     els.connectionStatusDot.classList.toggle("offline", !isOnline);
     els.connectionStatusText.textContent = text;
+}
+
+export function updateCurrentUserBadge(name) {
+    const value = String(name || "").trim();
+    if (!els.currentUserBadge) return;
+    if (!value) {
+        els.currentUserBadge.textContent = "";
+        els.currentUserBadge.classList.add("empty");
+        return;
+    }
+    els.currentUserBadge.textContent = "You: " + value;
+    els.currentUserBadge.classList.remove("empty");
 }
 
 export function showNotice(element, text, type, timeoutMs) {

@@ -16,7 +16,8 @@ import {
     setTableViewHandler,
     showNotice,
     showView,
-    updateConnectionStatus
+    updateConnectionStatus,
+    updateCurrentUserBadge
 } from "./ui.js";
 import { renderHostLobby, renderTable, renderVotePalette, setVoteSelectHandler } from "./render.js";
 import { setLocalVote } from "./game.js";
@@ -44,6 +45,7 @@ init();
 function init() {
     state.displayName = loadStoredDisplayName();
     els.displayNameInput.value = state.displayName;
+    updateCurrentUserBadge(state.displayName);
     configureHost({ sanitizeName });
     setTableViewHandler(renderTable);
     setVoteSelectHandler((vote) => {
@@ -145,6 +147,7 @@ function wireEvents() {
     els.displayNameInput.addEventListener("input", () => {
         state.displayName = sanitizeName(els.displayNameInput.value);
         storeDisplayName(state.displayName);
+        updateCurrentUserBadge(state.displayName);
     });
     window.addEventListener("pagehide", onPageHide);
     if (els.iceSettingsBtn) {
@@ -277,6 +280,7 @@ function ensureDisplayName() {
     state.displayName = name;
     storeDisplayName(name);
     els.displayNameInput.value = name;
+    updateCurrentUserBadge(name);
     return name;
 }
 

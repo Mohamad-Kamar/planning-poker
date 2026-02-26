@@ -247,6 +247,22 @@ textarea.code-box {
     font-weight: 600;
 }
 
+.current-user-badge {
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #f3f4f6;
+    color: var(--muted);
+    white-space: nowrap;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.current-user-badge.empty {
+    display: none;
+}
+
 .status {
     display: inline-flex;
     align-items: center;
