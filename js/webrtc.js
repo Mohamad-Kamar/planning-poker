@@ -4,6 +4,99 @@ import { log } from "./log.js";
 
 const ICE_GATHERING_TIMEOUT_MS = 10_000;
 
+function getSelectedCandidatePair(stats) {
+    for (const report of stats.values()) {
+        if (report.type === "transport" && report.selectedCandidatePairId) {
+            const fromTransport = stats.get(report.selectedCandidatePairId);
+            if (fromTransport) return fromTransport;
+        }
+    }
+    for (const report of stats.values()) {
+        if (report.type === "candidate-pair" && report.selected) {
+            return report;
+        }
+    }
+    for (const report of stats.values()) {
+        if (report.type === "candidate-pair" && report.nominated && report.state === "succeeded") {
+            return report;
+        }
+    }
+    return null;
+}
+
+function describeCandidate(candidate) {
+    if (!candidate) return null;
+    return {
+        type: candidate.candidateType || null,
+        protocol: candidate.protocol || null,
+        networkType: candidate.networkType || null,
+        relayProtocol: candidate.relayProtocol || null
+    };
+}
+
+function numberOrNull(value) {
+    return Number.isFinite(value) ? value : null;
+}
+
+export async function logPeerConnectionDiagnostics(pc, role, extra = {}) {
+    if (!pc || typeof pc.getStats !== "function") return;
+    try {
+        const stats = await pc.getStats();
+        let totalPairs = 0;
+        let succeededPairs = 0;
+        let failedPairs = 0;
+        let inProgressPairs = 0;
+
+        for (const report of stats.values()) {
+            if (report.type !== "candidate-pair") continue;
+            totalPairs += 1;
+            if (report.state === "succeeded") succeededPairs += 1;
+            if (report.state === "failed") failedPairs += 1;
+            if (report.state === "in-progress" || report.state === "inprogress") inProgressPairs += 1;
+        }
+
+        const selectedPair = getSelectedCandidatePair(stats);
+        const localCandidate = selectedPair && selectedPair.localCandidateId
+            ? stats.get(selectedPair.localCandidateId)
+            : null;
+        const remoteCandidate = selectedPair && selectedPair.remoteCandidateId
+            ? stats.get(selectedPair.remoteCandidateId)
+            : null;
+
+        log.warn("webrtc", "Peer connectivity diagnostics", {
+            role,
+            ...extra,
+            connectionState: pc.connectionState,
+            iceConnectionState: pc.iceConnectionState,
+            iceGatheringState: pc.iceGatheringState,
+            candidatePairs: {
+                total: totalPairs,
+                succeeded: succeededPairs,
+                failed: failedPairs,
+                inProgress: inProgressPairs
+            },
+            selectedPair: selectedPair
+                ? {
+                    state: selectedPair.state || null,
+                    nominated: !!selectedPair.nominated,
+                    currentRoundTripTime: numberOrNull(selectedPair.currentRoundTripTime),
+                    availableOutgoingBitrate: numberOrNull(selectedPair.availableOutgoingBitrate),
+                    bytesSent: numberOrNull(selectedPair.bytesSent),
+                    bytesReceived: numberOrNull(selectedPair.bytesReceived),
+                    local: describeCandidate(localCandidate),
+                    remote: describeCandidate(remoteCandidate)
+                }
+                : null
+        });
+    } catch (error) {
+        log.warn("webrtc", "Failed to read peer diagnostics", {
+            role,
+            ...extra,
+            message: String(error.message || error)
+        });
+    }
+}
+
 export function createPeerConnection() {
     const pc = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }],

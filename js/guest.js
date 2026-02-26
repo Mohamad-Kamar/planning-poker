@@ -2,7 +2,14 @@ import { state } from "./state.js";
 import { log } from "./log.js";
 import { decodeSignalCode, encodeSignalCode, validateSignalPayload } from "./signaling.js";
 import { compactFromDescription, descriptionFromCompact } from "./sdp.js";
-import { createPeerConnection, resetGuestConnection, shutdownGuest, shutdownHost, waitForIceComplete } from "./webrtc.js";
+import {
+    createPeerConnection,
+    logPeerConnectionDiagnostics,
+    resetGuestConnection,
+    shutdownGuest,
+    shutdownHost,
+    waitForIceComplete
+} from "./webrtc.js";
 import { els, setGuestStep, setSignalCodeDisplay, showNotice, showView, updateConnectionStatus } from "./ui.js";
 import { renderTable } from "./render.js";
 
@@ -128,6 +135,13 @@ export async function createGuestOfferCode() {
 }
 
 export function setupGuestPeerHandlers(pc, dc) {
+    let diagnosticsLogged = false;
+    const logDiagnosticsOnce = (trigger, failureState) => {
+        if (diagnosticsLogged) return;
+        diagnosticsLogged = true;
+        void logPeerConnectionDiagnostics(pc, "guest", { trigger, failureState });
+    };
+
     dc.onopen = () => {
         updateConnectionStatus(true, "Connected to host");
         setGuestStep(3);
@@ -158,6 +172,9 @@ export function setupGuestPeerHandlers(pc, dc) {
 
     pc.oniceconnectionstatechange = () => {
         log.info("webrtc", "Guest ICE state", { state: pc.iceConnectionState });
+        if (pc.iceConnectionState === "failed") {
+            logDiagnosticsOnce("iceconnectionstatechange", "failed");
+        }
     };
     pc.onconnectionstatechange = () => {
         const status = pc.connectionState;
@@ -167,6 +184,22 @@ export function setupGuestPeerHandlers(pc, dc) {
         }
         if (status === "failed" || status === "disconnected" || status === "closed") {
             updateConnectionStatus(false, "Disconnected");
+        }
+        if (status === "failed") {
+            showNotice(
+                els.guestConnectNotice,
+                "Connection failed. Could not establish a direct peer-to-peer path. Try Regenerate, switch networks, or configure TURN.",
+                "error"
+            );
+            if (state.currentView === "table") {
+                showNotice(
+                    els.tableNotice,
+                    "Connection failed. Could not establish a direct peer-to-peer path.",
+                    "error"
+                );
+            }
+            setGuestStep(2);
+            logDiagnosticsOnce("connectionstatechange", "failed");
         }
         log.info("webrtc", "Guest connection state", { state: status });
     };

@@ -62,7 +62,9 @@ async function connectGuestToHost(hostPage, guestPage, guestName) {
     if (connected) {
         await expect(guestRow).toContainText("Online", { timeout: 8_000 });
     } else {
-        await expect(guestPage.locator("#guestConnectNotice")).toContainText(/Waiting for data channel|Could not apply response code/);
+        await expect(guestPage.locator("#guestConnectNotice")).toContainText(
+            /Waiting for data channel|Could not apply response code|Connection failed/
+        );
     }
 
     return { connected };

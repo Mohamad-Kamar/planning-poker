@@ -2,7 +2,14 @@ import { state } from "./state.js";
 import { log } from "./log.js";
 import { decodeSignalCode, encodeSignalCode, validateSignalPayload } from "./signaling.js";
 import { compactFromDescription, descriptionFromCompact } from "./sdp.js";
-import { closePeerEntry, createPeerConnection, shutdownGuest, shutdownHost, waitForIceComplete } from "./webrtc.js";
+import {
+    closePeerEntry,
+    createPeerConnection,
+    logPeerConnectionDiagnostics,
+    shutdownGuest,
+    shutdownHost,
+    waitForIceComplete
+} from "./webrtc.js";
 import { els, setSignalCodeDisplay, showNotice, showView } from "./ui.js";
 import { getHostPlayersAsArray, hostApplyVote, upsertHostPlayer } from "./game.js";
 import { renderHostLobby, renderTable } from "./render.js";
@@ -137,6 +144,13 @@ export async function acceptGuestOffer(guestId, guestName, offerDescription) {
         dc: null,
         connected: false
     };
+    let diagnosticsLogged = false;
+    const logDiagnosticsOnce = (trigger, failureState) => {
+        if (diagnosticsLogged) return;
+        diagnosticsLogged = true;
+        void logPeerConnectionDiagnostics(peerConnection, "host", { guestId, trigger, failureState });
+    };
+
     state.hostPeers.set(guestId, peerEntry);
     upsertHostPlayer(guestId, guestName, false, sanitizeNameFn);
 
@@ -150,6 +164,9 @@ export async function acceptGuestOffer(guestId, guestName, offerDescription) {
             guestId,
             state: peerConnection.iceConnectionState
         });
+        if (peerConnection.iceConnectionState === "failed") {
+            logDiagnosticsOnce("iceconnectionstatechange", "failed");
+        }
     };
     peerConnection.onconnectionstatechange = () => {
         const status = peerConnection.connectionState;
@@ -160,6 +177,14 @@ export async function acceptGuestOffer(guestId, guestName, offerDescription) {
             broadcastState();
             renderHostLobby();
             renderTable();
+        }
+        if (status === "failed") {
+            showNotice(
+                els.hostLobbyNotice,
+                "Connection to " + peerEntry.name + " failed. They may be on a restricted network (NAT/firewall).",
+                "warn"
+            );
+            logDiagnosticsOnce("connectionstatechange", "failed");
         }
     };
 
