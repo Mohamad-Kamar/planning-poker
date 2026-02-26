@@ -2,6 +2,8 @@ import { state } from "./state.js";
 import { els, setSignalCodeDisplay, showNotice, updateConnectionStatus } from "./ui.js";
 import { log } from "./log.js";
 
+const ICE_GATHERING_TIMEOUT_MS = 10_000;
+
 export function createPeerConnection() {
     const pc = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -11,19 +13,43 @@ export function createPeerConnection() {
     return pc;
 }
 
-export function waitForIceComplete(pc) {
+export function waitForIceComplete(pc, timeoutMs = ICE_GATHERING_TIMEOUT_MS) {
     if (pc.iceGatheringState === "complete") {
         return Promise.resolve();
     }
+    const effectiveTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0
+        ? timeoutMs
+        : ICE_GATHERING_TIMEOUT_MS;
+
     return new Promise((resolve) => {
+        let done = false;
+
+        const finish = (timedOut) => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            pc.removeEventListener("icegatheringstatechange", onStateChange);
+            if (timedOut) {
+                log.warn("webrtc", "ICE gathering timeout reached; continuing with partial candidates", {
+                    timeoutMs: effectiveTimeoutMs,
+                    state: pc.iceGatheringState
+                });
+            } else {
+                log.info("webrtc", "ICE gathering completed");
+            }
+            resolve();
+        };
+
         const onStateChange = () => {
             if (pc.iceGatheringState === "complete") {
-                pc.removeEventListener("icegatheringstatechange", onStateChange);
-                log.info("webrtc", "ICE gathering completed");
-                resolve();
+                finish(false);
             }
         };
+
         pc.addEventListener("icegatheringstatechange", onStateChange);
+        const timer = setTimeout(() => {
+            finish(true);
+        }, effectiveTimeoutMs);
     });
 }
 

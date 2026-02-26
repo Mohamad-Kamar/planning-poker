@@ -157,6 +157,7 @@ export async function acceptGuestOffer(guestId, guestName, offerDescription) {
         if (status === "disconnected" || status === "failed" || status === "closed") {
             peerEntry.connected = false;
             upsertHostPlayer(guestId, peerEntry.name, false, sanitizeNameFn);
+            broadcastState();
             renderHostLobby();
             renderTable();
         }
@@ -206,6 +207,7 @@ export function setupHostDataChannel(guestId, channel) {
     channel.onclose = () => {
         entry.connected = false;
         upsertHostPlayer(guestId, entry.name, false, sanitizeNameFn);
+        broadcastState();
         renderHostLobby();
         renderTable();
         log.warn("webrtc", "DataChannel closed", { role: "host", guestId, label: channel.label });
