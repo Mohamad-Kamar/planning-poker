@@ -241,6 +241,78 @@ test("connection settings dialog persists custom ICE servers", async ({ page }) 
     await page.locator("#iceSettingsCancelBtn").click();
 });
 
+test("host session snapshot restores table context after refresh", async ({ page }) => {
+    await openHome(page);
+    await createHost(page, "HostPersist");
+    await startGameFromLobby(page);
+    await page.locator("#hostRoundTitleInput").fill("Resilience");
+    await page.locator('#votePalette .vote-card[data-vote="13"]').click();
+
+    await page.reload();
+
+    await expect(page.locator("#tableView.active")).toBeVisible();
+    await expect(page.locator("#tableSubtitle")).toContainText("Round 1 - Resilience");
+    await expect(page.locator('#votePalette .vote-card.selected[data-vote="13"]')).toBeVisible();
+    await expect(page.locator("#tableNotice")).toContainText("Session restored");
+    await expect(page.locator("#connectionStatusText")).toContainText("Hosting 0 guest(s)");
+
+    await page.locator("#leaveSessionBtn").click();
+    await expect(page.locator("#hostLobbyView.active")).toBeVisible();
+    await expect(page.locator("#hostPlayerList")).toContainText("HostPersist");
+});
+
+test("guest restored table shows reconnect journey after refresh", async ({ page }) => {
+    await openHome(page);
+    await page.evaluate(async () => {
+        const { state } = await import("/js/state.js");
+        const { showView } = await import("/js/ui.js");
+        const { renderTable } = await import("/js/render.js");
+        const { saveSessionSnapshot } = await import("/js/persistence.js");
+
+        state.role = "guest";
+        state.localId = "guestrestore01";
+        state.displayName = "GuestRestore";
+        state.selectedVote = "8";
+        state.roomId = "room-restore";
+        state.guestRemoteState = {
+            round: 3,
+            roundTitle: "Checkout Flow",
+            started: true,
+            revealed: false,
+            players: [
+                { id: "host-restore", name: "HostRestore", connected: false, isHost: true, voted: true, vote: null },
+                { id: "guestrestore01", name: "GuestRestore", connected: false, isHost: false, voted: true, vote: null }
+            ]
+        };
+        showView("table");
+        renderTable();
+        saveSessionSnapshot();
+    });
+
+    await page.reload();
+
+    await expect(page.locator("#tableView.active")).toBeVisible();
+    await expect(page.locator("#tableSubtitle")).toContainText("Round 3 - Checkout Flow");
+    await expect(page.locator("#leaveSessionBtn")).toHaveText("Reconnect");
+    await expect(page.locator("#tableNotice")).toContainText("Session restored");
+
+    await page.locator("#leaveSessionBtn").click();
+    await expect(page.locator("#guestConnectView.active")).toBeVisible();
+    await expect(page.locator("#copyGuestJoinCodeBtn")).toBeEnabled({ timeout: 10_000 });
+});
+
+test("explicit leave clears session snapshot", async ({ page }) => {
+    await openHome(page);
+    await createHost(page, "HostClear");
+
+    await page.locator("#hostBackHomeBtn").click();
+    await expect(page.locator("#homeView.active")).toBeVisible();
+
+    await page.reload();
+    await expect(page.locator("#homeView.active")).toBeVisible();
+    await expect(page.locator("#hostLobbyView.active")).toHaveCount(0);
+});
+
 test("guest fallback starts after first failed state without waiting for second failed event", async ({ page }) => {
     await page.goto("/");
     const result = await page.evaluate(async () => {
