@@ -85,6 +85,46 @@ Inspect logs in DevTools:
 - `window.planningPokerLog.dump()` for table output
 - `window.planningPokerLog.clear()` to reset
 
+## E2E Testing (Playwright CLI)
+
+This repo uses Playwright CLI for browser E2E tests.
+
+Install dependencies:
+
+```bash
+npm install
+npx playwright install
+```
+
+Run tests:
+
+```bash
+npm run test:e2e
+```
+
+Useful variants:
+
+```bash
+npm run test:e2e:chromium
+npm run test:e2e:firefox
+npm run test:e2e:headed
+npm run test:e2e:debug
+npm run test:e2e:report
+```
+
+Notes:
+- Playwright starts a local static server automatically via `playwright.config.js` `webServer`.
+- The main flow test covers host + guest connection, online status, and vote reveal.
+
+## GitHub Actions
+
+CI workflow: `.github/workflows/playwright.yml`
+
+- Runs on push to `main` and pull requests
+- Matrix jobs for `chromium` and `firefox`
+- Uses Playwright CLI (`npx playwright install --with-deps` + `npx playwright test`)
+- Uploads `playwright-report` and `test-results` artifacts for debugging
+
 ## Sanity References
 
 - `serverless-webrtc` demo: manual offer/answer exchange without a signaling server (`http://cjb.github.io/serverless-webrtc/`).

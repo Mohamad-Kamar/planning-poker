@@ -1,0 +1,30 @@
+{
+  "name": "planning-poker",
+  "version": "1.0.0",
+  "description": "Static planning-poker app with no backend and no serverless functions.",
+  "private": true,
+  "scripts": {
+    "test": "npm run test:e2e",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:chromium": "playwright test --project=chromium",
+    "test:e2e:firefox": "playwright test --project=firefox",
+    "test:e2e:report": "playwright show-report"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mohamad-Kamar/planning-poker.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Mohamad-Kamar/planning-poker/issues"
+  },
+  "homepage": "https://github.com/Mohamad-Kamar/planning-poker#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  }
+}
