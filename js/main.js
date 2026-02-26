@@ -29,6 +29,9 @@ import {
     onHostRoundTitleChange,
     onHostRevealVotes,
     onHostStartGame,
+    approvePendingRejoin,
+    rejectPendingRejoin,
+    startHostRecoveryRelayListener,
     startHostSession
 } from "./host.js";
 import {
@@ -36,7 +39,8 @@ import {
     notifyGuestLeaving,
     onRegenerateGuestOffer,
     sendJson as guestSendJson,
-    startGuestSession
+    startGuestSession,
+    triggerGuestAutoRejoin
 } from "./guest.js";
 import { shutdownGuest, shutdownHost } from "./webrtc.js";
 import { clearSessionSnapshot, loadSessionSnapshot, saveSessionSnapshot } from "./persistence.js";
@@ -107,6 +111,21 @@ function wireEvents() {
     els.clearHostJoinCodeBtn.addEventListener("click", () => {
         els.hostIncomingJoinCode.value = "";
     });
+    if (els.hostPendingRejoinList) {
+        els.hostPendingRejoinList.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            const approveId = target.getAttribute("data-approve-rejoin");
+            if (approveId) {
+                approvePendingRejoin(approveId);
+                return;
+            }
+            const rejectId = target.getAttribute("data-reject-rejoin");
+            if (rejectId) {
+                rejectPendingRejoin(rejectId);
+            }
+        });
+    }
     els.copyHostResponseCodeBtn.addEventListener("click", async () => {
         await copyTextWithFeedback(state.hostResponseCodeRaw, els.copyHostResponseCodeBtn, "Copied");
     });
@@ -272,11 +291,13 @@ function onLeaveOrBack() {
         showView("guestConnect");
         setGuestStep(1);
         showNotice(els.guestConnectNotice, "Session restored. Share a fresh join code with host to reconnect.", "info");
+        state.guestAutoRejoinEnabled = true;
         void onRegenerateGuestOffer();
         saveSessionSnapshot();
         return;
     }
 
+    state.guestAutoRejoinEnabled = false;
     notifyGuestLeaving();
     shutdownGuest("Disconnected.");
     clearSessionSnapshot();
@@ -355,21 +376,22 @@ function restoreHostSnapshot(snapshot) {
         "Shareability: waiting for code"
     );
     renderHostLobby();
+    startHostRecoveryRelayListener();
 
     if (snapshot.currentView === "table") {
         showView("table");
         renderTable();
         showNotice(
             els.tableNotice,
-            "Session restored after refresh. Guests need a fresh join and response code exchange to reconnect.",
-            "warn"
+            "Session restored. Waiting for guests to auto-rejoin. Manual code exchange remains available.",
+            "info"
         );
     } else {
         showView("hostLobby");
         showNotice(
             els.hostLobbyNotice,
-            "Session restored after refresh. Guests need a fresh join and response code exchange to reconnect.",
-            "warn"
+            "Session restored. Guests can auto-rejoin; manual code exchange remains available.",
+            "info"
         );
     }
     saveSessionSnapshot();
@@ -384,6 +406,7 @@ function restoreGuestSnapshot(snapshot) {
     state.guestChannel = null;
     state.guestJoinCodeRaw = "";
     state.guestResponseApplied = false;
+    state.guestAutoRejoinEnabled = true;
     state.session = null;
     state.hostPeers.clear();
     state.hostResponseCodeRaw = "";
@@ -406,7 +429,8 @@ function restoreGuestSnapshot(snapshot) {
     if (snapshot.currentView === "table" && snapshot.guestRemoteState) {
         showView("table");
         renderTable();
-        showNotice(els.tableNotice, "Session restored. Click Reconnect to generate a fresh join code.", "warn");
+        showNotice(els.tableNotice, "Session restored. Attempting to reconnect to host...", "info");
+        triggerGuestAutoRejoin("restored-session");
     } else {
         showView("guestConnect");
         showNotice(els.guestConnectNotice, "Session restored. Generating a fresh join code...", "info");

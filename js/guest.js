@@ -17,6 +17,12 @@ import { createMqttRelayChannel } from "./mqtt-relay.js";
 import { saveSessionSnapshot } from "./persistence.js";
 
 const RELAY_FALLBACK_DELAY_MS = 2500;
+const REJOIN_ACK_TIMEOUT_MS = 4500;
+const REJOIN_MAX_RETRIES = 8;
+
+let guestRejoinTimer = null;
+let guestRejoinAttempts = 0;
+let guestAwaitingRejoinAck = false;
 
 export function startGuestSession(displayName) {
     shutdownHost();
@@ -28,6 +34,8 @@ export function startGuestSession(displayName) {
     state.displayName = displayName;
     state.guestResponseApplied = false;
     state.roomId = null;
+    state.guestAutoRejoinEnabled = true;
+    resetGuestRejoinState();
 
     showView("guestConnect");
     onRegenerateGuestOffer();
@@ -39,6 +47,8 @@ export async function onRegenerateGuestOffer() {
     try {
         state.role = "guest";
         state.guestResponseApplied = false;
+        state.guestAutoRejoinEnabled = true;
+        resetGuestRejoinState();
         els.connectGuestBtn.disabled = false;
         setGuestStep(1);
         showNotice(els.guestConnectNotice, "Generating join code...", "info");
@@ -108,6 +118,7 @@ export async function onGuestConnectWithResponseCode() {
 }
 
 export async function createGuestOfferCode() {
+    resetGuestRejoinState();
     resetGuestConnection();
     const pc = createPeerConnection();
     const dc = pc.createDataChannel("poker");
@@ -232,6 +243,7 @@ export function setupGuestPeerHandlers(pc, dc) {
 
 export function onHostChannelOpen(channel) {
     if (state.guestChannel !== channel) return;
+    resetGuestRejoinState();
     updateConnectionStatus(true, "Connected to host");
     setGuestStep(3);
     showNotice(els.guestConnectNotice, "Connected. Entering table...", "info");
@@ -247,22 +259,34 @@ export function onHostChannelOpen(channel) {
 
 export function onHostChannelClose(channel) {
     if (state.guestChannel !== channel) return;
+    guestAwaitingRejoinAck = false;
+    if (state.guestChannel === channel) {
+        state.guestChannel = null;
+    }
     updateConnectionStatus(false, "Disconnected");
     if (state.role === "guest") {
         showNotice(els.tableNotice, "Connection closed.", "warn");
+    }
+    if (canAttemptGuestAutoRejoin()) {
+        scheduleGuestAutoRejoin("channel-closed", true);
     }
     saveSessionSnapshot();
 }
 
 export function onHostChannelMessage(rawData, channel) {
     if (state.guestChannel !== channel) return;
-    handleGuestInboundMessage(rawData);
+    handleGuestInboundMessage(rawData, channel);
 }
 
 export function notifyGuestLeaving() {
     if (state.role !== "guest") return;
     if (!state.guestChannel || state.guestChannel.readyState !== "open") return;
     sendJson(state.guestChannel, { t: "leave" });
+}
+
+export function triggerGuestAutoRejoin(reason = "manual") {
+    if (!canAttemptGuestAutoRejoin()) return;
+    scheduleGuestAutoRejoin(reason, true);
 }
 
 function startGuestRelayFallback() {
@@ -299,7 +323,109 @@ function startGuestRelayFallback() {
     state.guestChannel = relayChannel;
 }
 
-export function handleGuestInboundMessage(rawData) {
+function canAttemptGuestAutoRejoin() {
+    if (!state.guestAutoRejoinEnabled) return false;
+    if (state.role !== "guest") return false;
+    if (!state.roomId) return false;
+    if (state.currentView !== "table" && !(state.guestRemoteState && state.guestRemoteState.started)) {
+        return false;
+    }
+    return guestRejoinAttempts < REJOIN_MAX_RETRIES;
+}
+
+function clearGuestRejoinTimer() {
+    if (!guestRejoinTimer) return;
+    clearTimeout(guestRejoinTimer);
+    guestRejoinTimer = null;
+}
+
+function resetGuestRejoinState() {
+    clearGuestRejoinTimer();
+    guestRejoinAttempts = 0;
+    guestAwaitingRejoinAck = false;
+}
+
+function getGuestRejoinDelayMs() {
+    const step = Math.max(0, guestRejoinAttempts - 1);
+    return Math.min(1000 * (2 ** step), 8000);
+}
+
+function scheduleGuestAutoRejoin(reason, immediate = false) {
+    if (!canAttemptGuestAutoRejoin()) return;
+    clearGuestRejoinTimer();
+    const delayMs = immediate ? 0 : getGuestRejoinDelayMs();
+    guestRejoinTimer = setTimeout(() => {
+        guestRejoinTimer = null;
+        void attemptGuestAutoRejoin(reason);
+    }, delayMs);
+}
+
+async function attemptGuestAutoRejoin(reason) {
+    if (!canAttemptGuestAutoRejoin()) return;
+    guestRejoinAttempts += 1;
+    guestAwaitingRejoinAck = true;
+    updateConnectionStatus(false, "Reconnecting to host...");
+    showNotice(
+        els.tableNotice,
+        "Trying to reconnect (" + guestRejoinAttempts + "/" + REJOIN_MAX_RETRIES + ")...",
+        "warn"
+    );
+    log.info("guest", "Guest auto-rejoin attempt", { reason, attempt: guestRejoinAttempts });
+
+    const roomId = state.roomId;
+    const relayChannel = createMqttRelayChannel("guest", roomId, state.localId, {
+        onOpen: (channel) => {
+            if (state.role !== "guest" || !state.guestAutoRejoinEnabled) {
+                channel.close();
+                return;
+            }
+            state.guestChannel = channel;
+            sendJson(channel, { t: "rejoin", id: state.localId, n: state.displayName });
+            setTimeout(() => {
+                if (state.guestChannel !== channel) return;
+                if (!guestAwaitingRejoinAck) return;
+                try {
+                    channel.close();
+                } catch (_error) {
+                    // Ignore close errors.
+                }
+            }, REJOIN_ACK_TIMEOUT_MS);
+        },
+        onClose: () => {
+            if (state.guestChannel === relayChannel) {
+                state.guestChannel = null;
+            }
+            updateConnectionStatus(false, "Reconnecting to host...");
+            if (canAttemptGuestAutoRejoin()) {
+                scheduleGuestAutoRejoin("relay-close");
+            }
+        },
+        onMessage: (payload) => {
+            if (state.guestChannel !== relayChannel) return;
+            onHostChannelMessage(payload, relayChannel);
+        },
+        onFailure: (errorInfo) => {
+            const reasonText = errorInfo && errorInfo.reason ? errorInfo.reason : "unknown";
+            showNotice(
+                els.tableNotice,
+                "Reconnect attempt failed (" + reasonText + "). Retrying...",
+                "warn"
+            );
+            if (canAttemptGuestAutoRejoin()) {
+                scheduleGuestAutoRejoin("relay-failure");
+                return;
+            }
+            showNotice(
+                els.tableNotice,
+                "Could not reconnect automatically. Click Reconnect to generate a fresh join code.",
+                "error"
+            );
+        }
+    });
+    state.guestChannel = relayChannel;
+}
+
+export function handleGuestInboundMessage(rawData, channel) {
     let message;
     try {
         message = JSON.parse(rawData);
@@ -308,6 +434,40 @@ export function handleGuestInboundMessage(rawData) {
     }
     if (!message || typeof message !== "object") return;
     log.info("game", "Message received", { role: "guest", type: message.t || "unknown" });
+
+    if (message.t === "rejoinAck") {
+        if (message.to && message.to !== state.localId) return;
+        if (state.guestChannel !== channel) return;
+        guestAwaitingRejoinAck = false;
+        if (message.room) {
+            state.roomId = String(message.room);
+        }
+        onHostChannelOpen(channel);
+        return;
+    }
+
+    if (message.t === "rejoinReject") {
+        if (message.to && message.to !== state.localId) return;
+        guestAwaitingRejoinAck = false;
+        updateConnectionStatus(false, "Reconnect pending approval");
+        showNotice(
+            els.tableNotice,
+            "Host has not approved reconnect yet. Retrying shortly...",
+            "warn"
+        );
+        if (state.guestChannel === channel) {
+            try {
+                channel.close();
+            } catch (_error) {
+                // Ignore close errors.
+            }
+        }
+        if (canAttemptGuestAutoRejoin()) {
+            scheduleGuestAutoRejoin("rejected");
+        }
+        saveSessionSnapshot();
+        return;
+    }
 
     if (message.t === "state") {
         state.guestRemoteState = {

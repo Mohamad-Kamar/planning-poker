@@ -220,6 +220,14 @@ export function closePeerEntry(peerEntry) {
 }
 
 export function shutdownHost(noticeMessage) {
+    if (state.hostRecoveryRelay) {
+        try {
+            state.hostRecoveryRelay.close();
+        } catch (_error) {
+            // Ignore close errors.
+        }
+        state.hostRecoveryRelay = null;
+    }
     const peers = Array.from(state.hostPeers.values());
     for (const peer of peers) {
         closePeerEntry(peer);
@@ -230,6 +238,7 @@ export function shutdownHost(noticeMessage) {
     state.selectedVote = null;
     state.hostResponseCodeRaw = "";
     state.roomId = null;
+    state.hostPendingRejoinRequests = [];
     setSignalCodeDisplay(
         els.hostResponseCode,
         els.hostResponseCodeMeta,
@@ -247,6 +256,7 @@ export function shutdownHost(noticeMessage) {
 }
 
 export function shutdownGuest(noticeMessage) {
+    state.guestAutoRejoinEnabled = false;
     resetGuestConnection();
     state.guestRemoteState = null;
     state.guestJoinCodeRaw = "";

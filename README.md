@@ -115,7 +115,8 @@ Notes:
 - MQTT relay data is protected in transit via TLS to the broker, but broker operators can read plaintext payloads.
 - If host disconnects/closes, the session ends.
 - Session snapshot is stored in `sessionStorage`, so refresh in the same tab can restore room/table context.
-- Live transport objects are not restorable after refresh; host/guests still need a fresh manual code exchange to reconnect.
+- Live transport objects are not directly restorable after refresh, but host/guests can auto-rejoin via relay when session context is still available.
+- Manual join/response code exchange remains available as fallback and for newly joining guests.
 - Browser support for `CompressionStream` may vary. The app falls back to uncompressed code payloads when needed.
 
 ## Troubleshooting (Quick)

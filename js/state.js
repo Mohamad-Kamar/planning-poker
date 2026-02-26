@@ -16,7 +16,10 @@ export const state = {
     hostResponseCodeRaw: "",
     guestResponseApplied: false,
     currentView: "home",
-    roomId: null
+    roomId: null,
+    hostRecoveryRelay: null,
+    hostPendingRejoinRequests: [],
+    guestAutoRejoinEnabled: false
 };
 
 export function createShortId() {

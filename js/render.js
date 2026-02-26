@@ -30,6 +30,24 @@ export function renderHostLobby() {
     els.hostStartGameBtn.textContent = state.session.started ? "Return to Table" : "Start Game";
     els.copyHostResponseCodeBtn.disabled = !state.hostResponseCodeRaw;
     els.copyHostResponseCodeFormattedBtn.disabled = !state.hostResponseCodeRaw;
+
+    const pending = Array.isArray(state.hostPendingRejoinRequests)
+        ? state.hostPendingRejoinRequests
+        : [];
+    if (els.hostPendingRejoinPanel && els.hostPendingRejoinList) {
+        els.hostPendingRejoinPanel.style.display = pending.length ? "block" : "none";
+        els.hostPendingRejoinList.innerHTML = pending.map((request) => {
+            const safeId = escapeHtml(request.id);
+            const safeName = escapeHtml(request.name || "Guest");
+            return `<div class="row-between">
+                <div class="subtle">${safeName}</div>
+                <div class="row">
+                    <button class="btn btn-secondary" data-approve-rejoin="${safeId}">Approve</button>
+                    <button class="btn btn-secondary" data-reject-rejoin="${safeId}">Reject</button>
+                </div>
+            </div>`;
+        }).join("");
+    }
 }
 
 export function renderTable() {

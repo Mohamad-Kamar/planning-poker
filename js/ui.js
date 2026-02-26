@@ -14,6 +14,8 @@ export const els = {
     currentUserBadge: document.getElementById("currentUserBadge"),
     homeNotice: document.getElementById("homeNotice"),
     hostPlayerList: document.getElementById("hostPlayerList"),
+    hostPendingRejoinPanel: document.getElementById("hostPendingRejoinPanel"),
+    hostPendingRejoinList: document.getElementById("hostPendingRejoinList"),
     hostIncomingJoinCode: document.getElementById("hostIncomingJoinCode"),
     acceptGuestBtn: document.getElementById("acceptGuestBtn"),
     clearHostJoinCodeBtn: document.getElementById("clearHostJoinCodeBtn"),
