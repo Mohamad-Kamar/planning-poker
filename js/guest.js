@@ -251,6 +251,12 @@ export function onHostChannelMessage(rawData, channel) {
     handleGuestInboundMessage(rawData);
 }
 
+export function notifyGuestLeaving() {
+    if (state.role !== "guest") return;
+    if (!state.guestChannel || state.guestChannel.readyState !== "open") return;
+    sendJson(state.guestChannel, { t: "leave" });
+}
+
 function startGuestRelayFallback() {
     const roomId = state.roomId;
     if (!roomId) {
@@ -298,6 +304,7 @@ export function handleGuestInboundMessage(rawData) {
     if (message.t === "state") {
         state.guestRemoteState = {
             round: message.round || 1,
+            roundTitle: typeof message.roundTitle === "string" ? message.roundTitle : "",
             started: !!message.started,
             revealed: !!message.revealed,
             players: Array.isArray(message.players) ? message.players : []
@@ -330,6 +337,7 @@ export function handleGuestInboundMessage(rawData) {
         state.selectedVote = null;
         if (state.guestRemoteState) {
             state.guestRemoteState.round = message.round || state.guestRemoteState.round + 1;
+            state.guestRemoteState.roundTitle = "";
             state.guestRemoteState.revealed = false;
             state.guestRemoteState.players = state.guestRemoteState.players.map((player) => ({
                 ...player,

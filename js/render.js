@@ -44,7 +44,23 @@ export function renderTable() {
         : state.guestRemoteState
             ? state.guestRemoteState.round
             : 1;
-    els.tableSubtitle.textContent = "Round " + currentRound;
+    const currentRoundTitle = isHost && state.session
+        ? state.session.roundTitle
+        : state.guestRemoteState
+            ? state.guestRemoteState.roundTitle
+            : "";
+    els.tableSubtitle.textContent = currentRoundTitle
+        ? "Round " + currentRound + " - " + currentRoundTitle
+        : "Round " + currentRound;
+    if (els.hostRoundTitleInput) {
+        if (isHost) {
+            els.hostRoundTitleInput.style.display = "block";
+            els.hostRoundTitleInput.value = state.session ? (state.session.roundTitle || "") : "";
+        } else {
+            els.hostRoundTitleInput.style.display = "none";
+            els.hostRoundTitleInput.value = "";
+        }
+    }
 
     const players = getRenderablePlayersForUI();
     renderTablePlayers(players);

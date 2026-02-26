@@ -91,6 +91,11 @@ test("host and guest can play a full round lifecycle", async ({ browser }) => {
     if (guestConnection.connected) {
         await expect(guest.locator("#tableView.active")).toBeVisible();
     }
+    await host.locator("#hostRoundTitleInput").fill("API sizing");
+    await expect(host.locator("#tableSubtitle")).toContainText("Round 1 - API sizing");
+    if (guestConnection.connected) {
+        await expect(guest.locator("#tableSubtitle")).toContainText("Round 1 - API sizing");
+    }
 
     await host.locator('#votePalette .vote-card[data-vote="5"]').click();
     if (guestConnection.connected) {
@@ -117,8 +122,20 @@ test("host and guest can play a full round lifecycle", async ({ browser }) => {
     await expect(host.locator("#statMax")).toHaveText(guestConnection.connected ? "8" : "5");
     await expect(host.locator("#statConsensus")).toHaveText(guestConnection.connected ? "No" : "Yes");
 
+    await host.locator('#votePalette .vote-card[data-vote="13"]').click();
+    await expect(hostCard).toContainText("13");
+    await expect(host.locator("#statAverage")).toHaveText(guestConnection.connected ? "10.50" : "13");
+    await expect(host.locator("#statMedian")).toHaveText(guestConnection.connected ? "10.50" : "13");
+    await expect(host.locator("#statMin")).toHaveText(guestConnection.connected ? "8" : "13");
+    await expect(host.locator("#statMax")).toHaveText("13");
+    if (guestConnection.connected) {
+        await expect(playerCard(guest, "HostA")).toContainText("13");
+        await expect(guest.locator("#statAverage")).toHaveText("10.50");
+    }
+
     await host.locator("#hostResetBtn").click();
     await expect(host.locator("#tableSubtitle")).toContainText("Round 2");
+    await expect(host.locator("#tableSubtitle")).not.toContainText("API sizing");
     await expect(hostCard).not.toHaveClass(/revealed/);
     await expect(guestCard).not.toHaveClass(/revealed/);
     await expect(host.locator("#statsBar")).not.toHaveClass(/visible/);
@@ -126,7 +143,7 @@ test("host and guest can play a full round lifecycle", async ({ browser }) => {
     if (guestConnection.connected) {
         await guest.locator("#leaveSessionBtn").click();
         await expect(guest.locator("#homeView.active")).toBeVisible();
-        await expect(playerCard(host, "GuestA")).toContainText("Offline", { timeout: 15_000 });
+        await expect(host.locator("#tablePlayersGrid .player-card", { hasText: "GuestA" })).toHaveCount(0, { timeout: 15_000 });
     } else {
         await expect(host.locator("#tablePlayersGrid")).toContainText("GuestA");
     }
@@ -159,8 +176,8 @@ test("remaining guests receive disconnect updates", async ({ browser }) => {
 
     await guestA.locator("#leaveSessionBtn").click();
     await expect(guestA.locator("#homeView.active")).toBeVisible();
-    await expect(playerCard(host, "GuestA")).toContainText("Offline", { timeout: 15_000 });
-    await expect(playerCard(guestB, "GuestA")).toContainText("Offline", { timeout: 15_000 });
+    await expect(host.locator("#tablePlayersGrid .player-card", { hasText: "GuestA" })).toHaveCount(0, { timeout: 15_000 });
+    await expect(guestB.locator("#tablePlayersGrid .player-card", { hasText: "GuestA" })).toHaveCount(0, { timeout: 15_000 });
 
     await context.close();
 });

@@ -25,12 +25,14 @@ import {
     broadcastState,
     onAcceptGuestCode,
     onHostNewRound,
+    onHostRoundTitleChange,
     onHostRevealVotes,
     onHostStartGame,
     startHostSession
 } from "./host.js";
 import {
     onGuestConnectWithResponseCode,
+    notifyGuestLeaving,
     onRegenerateGuestOffer,
     sendJson as guestSendJson,
     startGuestSession
@@ -137,10 +139,14 @@ function wireEvents() {
     });
     els.hostRevealBtn.addEventListener("click", onHostRevealVotes);
     els.hostResetBtn.addEventListener("click", onHostNewRound);
+    els.hostRoundTitleInput.addEventListener("input", () => {
+        onHostRoundTitleChange(els.hostRoundTitleInput.value);
+    });
     els.displayNameInput.addEventListener("input", () => {
         state.displayName = sanitizeName(els.displayNameInput.value);
         storeDisplayName(state.displayName);
     });
+    window.addEventListener("pagehide", onPageHide);
     if (els.iceSettingsBtn) {
         els.iceSettingsBtn.addEventListener("click", openIceSettingsDialog);
     }
@@ -245,8 +251,20 @@ function onLeaveOrBack() {
         return;
     }
 
+    notifyGuestLeaving();
     shutdownGuest("Disconnected.");
     showView("home");
+}
+
+function onPageHide() {
+    if (state.role === "guest") {
+        notifyGuestLeaving();
+        shutdownGuest();
+        return;
+    }
+    if (state.role === "host") {
+        shutdownHost();
+    }
 }
 
 function ensureDisplayName() {

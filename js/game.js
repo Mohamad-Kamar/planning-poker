@@ -29,7 +29,6 @@ export function hostApplyVote(playerId, vote, deps) {
     if (!state.session) return;
     const player = state.session.players[playerId];
     if (!player) return;
-    if (state.session.revealed) return;
     player.vote = vote;
     deps.broadcastState();
     deps.renderTable();
@@ -81,6 +80,12 @@ export function upsertHostPlayer(id, name, connected, sanitizeName) {
     current.connected = !!connected;
     current.isHost = id === state.localId;
     state.session.players[id] = current;
+}
+
+export function removeHostPlayer(id) {
+    if (!state.session) return;
+    if (!id || id === state.localId) return;
+    delete state.session.players[id];
 }
 
 export function getHostPlayersAsArray(includeVotes) {

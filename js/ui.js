@@ -38,6 +38,7 @@ export const els = {
     guestBackHomeBtn: document.getElementById("guestBackHomeBtn"),
     guestConnectNotice: document.getElementById("guestConnectNotice"),
     tableSubtitle: document.getElementById("tableSubtitle"),
+    hostRoundTitleInput: document.getElementById("hostRoundTitleInput"),
     tableRoleChip: document.getElementById("tableRoleChip"),
     leaveSessionBtn: document.getElementById("leaveSessionBtn"),
     statsBar: document.getElementById("statsBar"),

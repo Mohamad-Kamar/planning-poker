@@ -12,12 +12,13 @@ import {
     waitForIceComplete
 } from "./webrtc.js";
 import { els, setSignalCodeDisplay, showNotice, showView } from "./ui.js";
-import { getHostPlayersAsArray, hostApplyVote, upsertHostPlayer } from "./game.js";
+import { getHostPlayersAsArray, hostApplyVote, removeHostPlayer, upsertHostPlayer } from "./game.js";
 import { renderHostLobby, renderTable } from "./render.js";
 import { createMqttRelayChannel } from "./mqtt-relay.js";
 
 let sanitizeNameFn = (name) => String(name || "").trim();
 const RELAY_FALLBACK_DELAY_MS = 2500;
+const ROUND_TITLE_MAX_LENGTH = 80;
 
 export function configureHost(deps) {
     if (deps && typeof deps.sanitizeName === "function") {
@@ -44,6 +45,7 @@ export function startHostSession(displayName) {
     );
     state.session = {
         round: 1,
+        roundTitle: "",
         started: false,
         revealed: false,
         players: {}
@@ -119,6 +121,7 @@ export function onHostRevealVotes() {
 export function onHostNewRound() {
     if (state.role !== "host" || !state.session) return;
     state.session.round += 1;
+    state.session.roundTitle = "";
     state.session.revealed = false;
     const playerIds = Object.keys(state.session.players);
     for (const id of playerIds) {
@@ -129,6 +132,14 @@ export function onHostNewRound() {
     broadcastState();
     renderTable();
     log.info("game", "Round reset", { round: state.session.round });
+}
+
+export function onHostRoundTitleChange(title) {
+    if (state.role !== "host" || !state.session) return;
+    state.session.roundTitle = sanitizeRoundTitle(title);
+    broadcastState();
+    renderTable();
+    log.info("game", "Round title updated", { round: state.session.round, hasTitle: !!state.session.roundTitle });
 }
 
 export async function acceptGuestOffer(guestId, guestName, offerDescription) {
@@ -292,8 +303,9 @@ export function onPeerChannelClose(guestId, channel) {
     const entry = state.hostPeers.get(guestId);
     if (!entry) return;
     if (channel && entry.dc !== channel) return;
-    entry.connected = false;
-    upsertHostPlayer(guestId, entry.name, false, sanitizeNameFn);
+    state.hostPeers.delete(guestId);
+    removeHostPlayer(guestId);
+    closePeerEntry(entry);
     broadcastState();
     renderHostLobby();
     renderTable();
@@ -362,6 +374,11 @@ export function handleHostInboundMessage(guestId, rawData) {
         const vote = message.v == null ? null : String(message.v);
         const deps = { broadcastState, renderTable, renderHostLobby };
         hostApplyVote(guestId, vote, deps);
+        return;
+    }
+
+    if (message.t === "leave") {
+        onPeerChannelClose(guestId);
     }
 }
 
@@ -370,6 +387,7 @@ export function broadcastState() {
     const payload = {
         t: "state",
         round: state.session.round,
+        roundTitle: state.session.roundTitle || "",
         started: state.session.started,
         revealed: state.session.revealed,
         players: getHostPlayersAsArray(false).map((player) => {
@@ -386,6 +404,10 @@ export function broadcastState() {
     };
     broadcastMessageToGuests(payload);
     log.info("host", "State broadcast", { players: payload.players.length, round: payload.round });
+}
+
+function sanitizeRoundTitle(title) {
+    return String(title || "").replace(/\s+/g, " ").trim().slice(0, ROUND_TITLE_MAX_LENGTH);
 }
 
 export function broadcastMessageToGuests(message) {
