@@ -15,6 +15,8 @@ import { els, setGuestStep, setSignalCodeDisplay, showNotice, showView, updateCo
 import { renderTable } from "./render.js";
 import { createMqttRelayChannel } from "./mqtt-relay.js";
 
+const RELAY_FALLBACK_DELAY_MS = 2500;
+
 export function startGuestSession(displayName) {
     shutdownHost();
     shutdownGuest();
@@ -142,10 +144,24 @@ export function setupGuestPeerHandlers(pc, dc) {
     let diagnosticsLogged = false;
     let restartTriggered = false;
     let relayFallbackTriggered = false;
+    let relayFallbackTimer = null;
     const logDiagnosticsOnce = (trigger, failureState) => {
         if (diagnosticsLogged) return;
         diagnosticsLogged = true;
         void logPeerConnectionDiagnostics(pc, "guest", { trigger, failureState });
+    };
+    const clearRelayFallbackTimer = () => {
+        if (!relayFallbackTimer) return;
+        clearTimeout(relayFallbackTimer);
+        relayFallbackTimer = null;
+    };
+    const triggerRelayFallback = (reason) => {
+        if (relayFallbackTriggered) return;
+        relayFallbackTriggered = true;
+        clearRelayFallbackTimer();
+        startGuestRelayFallback();
+        showNotice(els.guestConnectNotice, "Direct path failed. Trying relay fallback...", "warn");
+        log.warn("guest", "Guest relay fallback starting", { reason, hasRoomId: !!state.roomId });
     };
 
     dc.onopen = () => {
@@ -173,6 +189,7 @@ export function setupGuestPeerHandlers(pc, dc) {
     pc.onconnectionstatechange = () => {
         const status = pc.connectionState;
         if (status === "connected") {
+            clearRelayFallbackTimer();
             updateConnectionStatus(true, "Connected to host");
             return;
         }
@@ -184,19 +201,16 @@ export function setupGuestPeerHandlers(pc, dc) {
             if (!restartTriggered) {
                 restartTriggered = attemptIceRestart(pc, { role: "guest" });
                 if (restartTriggered) {
-                    showNotice(els.guestConnectNotice, "Direct path failed. Retrying ICE before relay fallback...", "warn");
-                    return;
+                    showNotice(els.guestConnectNotice, "Direct path failed. Starting relay fallback shortly...", "warn");
+                    relayFallbackTimer = setTimeout(() => {
+                        triggerRelayFallback("post-ice-restart-delay");
+                    }, RELAY_FALLBACK_DELAY_MS);
+                } else {
+                    triggerRelayFallback("ice-restart-unavailable");
                 }
+                return;
             }
-            if (!relayFallbackTriggered && state.roomId) {
-                relayFallbackTriggered = true;
-                startGuestRelayFallback();
-            }
-            showNotice(
-                els.guestConnectNotice,
-                "Connection failed on direct path. Trying relay fallback...",
-                "error"
-            );
+            triggerRelayFallback("repeat-failed-state");
             if (state.currentView === "table") {
                 showNotice(
                     els.tableNotice,
@@ -239,7 +253,14 @@ export function onHostChannelMessage(rawData, channel) {
 
 function startGuestRelayFallback() {
     const roomId = state.roomId;
-    if (!roomId) return;
+    if (!roomId) {
+        showNotice(
+            els.guestConnectNotice,
+            "Direct path failed and relay setup is missing room info. Regenerate your join code and retry.",
+            "error"
+        );
+        return;
+    }
     const relayChannel = createMqttRelayChannel("guest", roomId, state.localId, {
         onOpen: (channel) => {
             state.guestChannel = channel;
@@ -251,6 +272,14 @@ function startGuestRelayFallback() {
         },
         onMessage: (payload) => {
             onHostChannelMessage(payload, relayChannel);
+        },
+        onFailure: (errorInfo) => {
+            const reason = errorInfo && errorInfo.reason ? errorInfo.reason : "unknown";
+            showNotice(
+                els.guestConnectNotice,
+                "Relay fallback failed (" + reason + "). Regenerate your join code or try another network.",
+                "error"
+            );
         }
     });
     state.guestChannel = relayChannel;

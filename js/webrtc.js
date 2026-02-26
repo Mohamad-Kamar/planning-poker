@@ -128,6 +128,7 @@ export function attemptIceRestart(pc, extra = {}) {
         log.warn("webrtc", "ICE restart requested", {
             attempt: nextAttempt,
             maxAttempts: ICE_RESTART_MAX_ATTEMPTS,
+            note: "best-effort only; manual signaling flow may still require relay fallback",
             ...extra
         });
         return true;

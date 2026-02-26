@@ -7,6 +7,13 @@ async function readCode(locator) {
     return (text || "").trim();
 }
 
+async function decodeSignalCodeInPage(page, code) {
+    return page.evaluate(async ({ codeValue }) => {
+        const { decodeSignalCode } = await import("/js/signaling.js");
+        return decodeSignalCode(codeValue);
+    }, { codeValue: code });
+}
+
 function playerCard(page, playerName) {
     return page.locator("#tablePlayersGrid .player-card", { hasText: playerName }).first();
 }
@@ -166,4 +173,366 @@ test("join code UI shows shareability hint", async ({ page }) => {
     await expect(page.locator("#copyGuestJoinCodeBtn")).toBeEnabled();
     await expect(page.locator("#guestJoinCodeMeta")).toContainText("chars");
     await expect(page.locator("#guestJoinCodeQuality")).toContainText("Shareability:");
+});
+
+test("response code includes room identifier", async ({ browser }) => {
+    const context = await browser.newContext();
+    const host = await context.newPage();
+    const guest = await context.newPage();
+
+    await openHome(host);
+    await openHome(guest);
+    await createHost(host, "HostRoom");
+    await guest.locator("#displayNameInput").fill("GuestRoom");
+    await guest.locator("#joinRoomBtn").click();
+    await expect(guest.locator("#copyGuestJoinCodeBtn")).toBeEnabled();
+
+    const joinCode = await readCode(guest.locator("#guestJoinCode"));
+    await host.locator("#hostIncomingJoinCode").fill(joinCode);
+    await host.locator("#acceptGuestBtn").click();
+    await expect(host.locator("#copyHostResponseCodeBtn")).toBeEnabled();
+
+    const responseCode = await readCode(host.locator("#hostResponseCode"));
+    const payload = await decodeSignalCodeInPage(host, responseCode);
+
+    expect(payload.v).toBe(1);
+    expect(typeof payload.room).toBe("string");
+    expect(payload.room.length).toBeGreaterThan(0);
+    expect(payload.room).toBe(payload.f);
+
+    await context.close();
+});
+
+test("connection settings dialog persists custom ICE servers", async ({ page }) => {
+    await page.goto("/");
+
+    await page.locator("#iceSettingsBtn").click();
+    await expect(page.locator("#iceSettingsDialog")).toBeVisible();
+    await expect(page.locator("#defaultIceServersList")).toContainText("stun:stun.l.google.com:19302");
+
+    const customServers = [
+        "turn:example.com:3478?transport=tcp | alice | s3cret",
+        "stun:stun.example.com:3478"
+    ].join("\n");
+    await page.locator("#customIceServersInput").fill(customServers);
+    await page.locator("#iceSettingsSaveBtn").click();
+    await expect(page.locator("#homeNotice")).toContainText("Connection settings saved");
+
+    await page.locator("#iceSettingsBtn").click();
+    await expect(page.locator("#customIceServersInput")).toHaveValue(/turn:example\.com:3478\?transport=tcp/);
+    await expect(page.locator("#customIceServersInput")).toHaveValue(/stun:stun\.example\.com:3478/);
+    await page.locator("#iceSettingsCancelBtn").click();
+});
+
+test("guest fallback starts after first failed state without waiting for second failed event", async ({ page }) => {
+    await page.goto("/");
+    const result = await page.evaluate(async () => {
+        const originalWebSocket = window.WebSocket;
+        const OPEN = 1;
+        let websocketCreates = 0;
+        let restartCalls = 0;
+
+        function encodeRemainingLength(length) {
+            const bytes = [];
+            let value = length;
+            do {
+                let digit = value % 128;
+                value = Math.floor(value / 128);
+                if (value > 0) digit |= 0x80;
+                bytes.push(digit);
+            } while (value > 0);
+            return Uint8Array.from(bytes);
+        }
+
+        function packet(typeAndFlags, body) {
+            const payload = body || new Uint8Array(0);
+            const header = Uint8Array.from([typeAndFlags]);
+            const remaining = encodeRemainingLength(payload.length);
+            const output = new Uint8Array(header.length + remaining.length + payload.length);
+            output.set(header, 0);
+            output.set(remaining, header.length);
+            output.set(payload, header.length + remaining.length);
+            return output;
+        }
+
+        function buildConnack() {
+            return packet(0x20, Uint8Array.from([0x00, 0x00]));
+        }
+
+        function buildSuback(packetIdMsb, packetIdLsb) {
+            return packet(0x90, Uint8Array.from([packetIdMsb, packetIdLsb, 0x00]));
+        }
+
+        class FakeWebSocket {
+            static OPEN = OPEN;
+
+            constructor() {
+                websocketCreates += 1;
+                this.binaryType = "arraybuffer";
+                this.readyState = 0;
+                this.onopen = null;
+                this.onmessage = null;
+                this.onclose = null;
+                setTimeout(() => {
+                    this.readyState = OPEN;
+                    if (typeof this.onopen === "function") this.onopen();
+                }, 0);
+            }
+
+            send(data) {
+                const bytes = new Uint8Array(data);
+                const packetType = bytes[0] >> 4;
+                if (packetType === 1 && typeof this.onmessage === "function") {
+                    this.onmessage({ data: buildConnack().buffer });
+                }
+                if (packetType === 8 && typeof this.onmessage === "function") {
+                    const packetIdMsb = bytes[2] || 0x00;
+                    const packetIdLsb = bytes[3] || 0x01;
+                    this.onmessage({ data: buildSuback(packetIdMsb, packetIdLsb).buffer });
+                }
+            }
+
+            close() {
+                this.readyState = 3;
+                if (typeof this.onclose === "function") this.onclose();
+            }
+        }
+
+        window.WebSocket = FakeWebSocket;
+        try {
+            const { state } = await import("/js/state.js");
+            const { setupGuestPeerHandlers } = await import("/js/guest.js");
+            const { els } = await import("/js/ui.js");
+
+            state.role = "guest";
+            state.currentView = "guestConnect";
+            state.displayName = "GuestFallback";
+            state.roomId = "room-fallback";
+            state.selectedVote = null;
+
+            const fakeDc = { send() {}, close() {} };
+            const fakePc = {
+                connectionState: "new",
+                iceConnectionState: "new",
+                restartIce() {
+                    restartCalls += 1;
+                }
+            };
+
+            state.guestChannel = fakeDc;
+            state.guestPeer = fakePc;
+            setupGuestPeerHandlers(fakePc, fakeDc);
+
+            fakePc.connectionState = "failed";
+            fakePc.onconnectionstatechange();
+
+            await new Promise((resolve) => setTimeout(resolve, 3200));
+            return {
+                websocketCreates,
+                restartCalls,
+                notice: els.guestConnectNotice.textContent || ""
+            };
+        } finally {
+            window.WebSocket = originalWebSocket;
+        }
+    });
+
+    expect(result.restartCalls).toBe(1);
+    expect(result.websocketCreates).toBeGreaterThan(0);
+    expect(result.notice).not.toContain("Retrying ICE before relay fallback");
+});
+
+test("guest relay timeout shows terminal error notice", async ({ page }) => {
+    test.setTimeout(35_000);
+    await page.goto("/");
+    const noticeText = await page.evaluate(async () => {
+        const originalWebSocket = window.WebSocket;
+        const OPEN = 1;
+
+        class TimeoutWebSocket {
+            static OPEN = OPEN;
+
+            constructor() {
+                this.binaryType = "arraybuffer";
+                this.readyState = 0;
+                this.onopen = null;
+                this.onclose = null;
+                setTimeout(() => {
+                    this.readyState = OPEN;
+                    if (typeof this.onopen === "function") this.onopen();
+                }, 0);
+            }
+
+            send(_data) {
+                // Intentionally never sends CONNACK/SUBACK to trigger timeout watchdog.
+            }
+
+            close() {
+                this.readyState = 3;
+                if (typeof this.onclose === "function") this.onclose();
+            }
+        }
+
+        window.WebSocket = TimeoutWebSocket;
+        try {
+            const { state } = await import("/js/state.js");
+            const { setupGuestPeerHandlers } = await import("/js/guest.js");
+            const { els } = await import("/js/ui.js");
+
+            state.role = "guest";
+            state.currentView = "guestConnect";
+            state.displayName = "GuestTimeout";
+            state.roomId = "room-timeout";
+            state.selectedVote = null;
+
+            const fakeDc = { send() {}, close() {} };
+            const fakePc = {
+                connectionState: "new",
+                iceConnectionState: "new",
+                restartIce() {}
+            };
+
+            state.guestChannel = fakeDc;
+            state.guestPeer = fakePc;
+            setupGuestPeerHandlers(fakePc, fakeDc);
+
+            fakePc.connectionState = "failed";
+            fakePc.onconnectionstatechange();
+
+            await new Promise((resolve) => setTimeout(resolve, 14_000));
+            return String(els.guestConnectNotice.textContent || "");
+        } finally {
+            window.WebSocket = originalWebSocket;
+        }
+    });
+
+    expect(noticeText).toContain("Relay fallback failed (timeout)");
+});
+
+test("mqtt relay channel works with mocked websocket transport", async ({ page }) => {
+    await page.goto("/");
+
+    const result = await page.evaluate(async () => {
+        const originalWebSocket = window.WebSocket;
+        const OPEN = 1;
+        const sentPacketTypes = [];
+
+        function encodeRemainingLength(length) {
+            const bytes = [];
+            let value = length;
+            do {
+                let digit = value % 128;
+                value = Math.floor(value / 128);
+                if (value > 0) digit |= 0x80;
+                bytes.push(digit);
+            } while (value > 0);
+            return Uint8Array.from(bytes);
+        }
+
+        function packet(typeAndFlags, body) {
+            const payload = body || new Uint8Array(0);
+            const header = Uint8Array.from([typeAndFlags]);
+            const remaining = encodeRemainingLength(payload.length);
+            const output = new Uint8Array(header.length + remaining.length + payload.length);
+            output.set(header, 0);
+            output.set(remaining, header.length);
+            output.set(payload, header.length + remaining.length);
+            return output;
+        }
+
+        function encodeUtf8String(value) {
+            const bytes = new TextEncoder().encode(value);
+            const output = new Uint8Array(2 + bytes.length);
+            output[0] = (bytes.length >> 8) & 0xff;
+            output[1] = bytes.length & 0xff;
+            output.set(bytes, 2);
+            return output;
+        }
+
+        function buildSuback(packetIdMsb, packetIdLsb) {
+            return packet(0x90, Uint8Array.from([packetIdMsb, packetIdLsb, 0x00]));
+        }
+
+        function buildConnack() {
+            return packet(0x20, Uint8Array.from([0x00, 0x00]));
+        }
+
+        class FakeWebSocket {
+            static OPEN = OPEN;
+
+            constructor() {
+                this.binaryType = "arraybuffer";
+                this.readyState = 0;
+                this.onopen = null;
+                this.onmessage = null;
+                this.onclose = null;
+                this.onerror = null;
+                setTimeout(() => {
+                    this.readyState = OPEN;
+                    if (typeof this.onopen === "function") this.onopen();
+                }, 0);
+            }
+
+            send(data) {
+                const bytes = new Uint8Array(data);
+                const packetType = bytes[0] >> 4;
+                sentPacketTypes.push(packetType);
+                if (packetType === 1) {
+                    if (typeof this.onmessage === "function") {
+                        this.onmessage({ data: buildConnack().buffer });
+                    }
+                    return;
+                }
+                if (packetType === 8) {
+                    const packetIdMsb = bytes[2] || 0x00;
+                    const packetIdLsb = bytes[3] || 0x01;
+                    if (typeof this.onmessage === "function") {
+                        this.onmessage({ data: buildSuback(packetIdMsb, packetIdLsb).buffer });
+                    }
+                    return;
+                }
+            }
+
+            close() {
+                this.readyState = 3;
+                if (typeof this.onclose === "function") this.onclose();
+            }
+        }
+
+        window.WebSocket = FakeWebSocket;
+        try {
+            const { createMqttRelayChannel } = await import("/js/mqtt-relay.js");
+            const channel = createMqttRelayChannel("guest", "room-smoke", "guest-smoke", {
+                onOpen: () => {},
+                onMessage: () => {},
+                onClose: () => {}
+            });
+
+            await new Promise((resolve, reject) => {
+                const started = Date.now();
+                const timer = setInterval(() => {
+                    if (sentPacketTypes.includes(1) && sentPacketTypes.includes(8)) {
+                        clearInterval(timer);
+                        resolve();
+                        return;
+                    }
+                    if (Date.now() - started > 5000) {
+                        clearInterval(timer);
+                        reject(new Error("MQTT mock did not emit CONNECT and SUBSCRIBE packets in time."));
+                    }
+                }, 20);
+            });
+
+            channel.close();
+            return {
+                sawConnectPacket: sentPacketTypes.includes(1),
+                sawSubscribePacket: sentPacketTypes.includes(8)
+            };
+        } finally {
+            window.WebSocket = originalWebSocket;
+        }
+    });
+
+    expect(result.sawConnectPacket).toBe(true);
+    expect(result.sawSubscribePacket).toBe(true);
 });

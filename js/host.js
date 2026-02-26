@@ -17,6 +17,7 @@ import { renderHostLobby, renderTable } from "./render.js";
 import { createMqttRelayChannel } from "./mqtt-relay.js";
 
 let sanitizeNameFn = (name) => String(name || "").trim();
+const RELAY_FALLBACK_DELAY_MS = 2500;
 
 export function configureHost(deps) {
     if (deps && typeof deps.sanitizeName === "function") {
@@ -150,10 +151,28 @@ export async function acceptGuestOffer(guestId, guestName, offerDescription) {
     let diagnosticsLogged = false;
     let restartTriggered = false;
     let relayFallbackTriggered = false;
+    let relayFallbackTimer = null;
     const logDiagnosticsOnce = (trigger, failureState) => {
         if (diagnosticsLogged) return;
         diagnosticsLogged = true;
         void logPeerConnectionDiagnostics(peerConnection, "host", { guestId, trigger, failureState });
+    };
+    const clearRelayFallbackTimer = () => {
+        if (!relayFallbackTimer) return;
+        clearTimeout(relayFallbackTimer);
+        relayFallbackTimer = null;
+    };
+    const triggerRelayFallback = (reason) => {
+        if (relayFallbackTriggered) return;
+        relayFallbackTriggered = true;
+        clearRelayFallbackTimer();
+        startHostRelayFallback(guestId);
+        showNotice(
+            els.hostLobbyNotice,
+            "Direct path failed for " + peerEntry.name + ". Trying relay fallback...",
+            "warn"
+        );
+        log.warn("host", "Host relay fallback starting", { guestId, reason });
     };
 
     state.hostPeers.set(guestId, peerEntry);
@@ -176,6 +195,10 @@ export async function acceptGuestOffer(guestId, guestName, offerDescription) {
     peerConnection.onconnectionstatechange = () => {
         const status = peerConnection.connectionState;
         log.info("webrtc", "Host connection state", { guestId, state: status });
+        if (status === "connected") {
+            clearRelayFallbackTimer();
+            return;
+        }
         if (status === "disconnected" || status === "failed" || status === "closed") {
             if (!peerEntry.dc || peerEntry.dc.transportType !== "mqtt-relay") {
                 onPeerChannelClose(guestId);
@@ -188,21 +211,18 @@ export async function acceptGuestOffer(guestId, guestName, offerDescription) {
                 if (restartTriggered) {
                     showNotice(
                         els.hostLobbyNotice,
-                        "Connection to " + peerEntry.name + " failed. Retrying ICE once before relay fallback...",
+                        "Connection to " + peerEntry.name + " failed on direct path. Starting relay fallback shortly...",
                         "warn"
                     );
-                    return;
+                    relayFallbackTimer = setTimeout(() => {
+                        triggerRelayFallback("post-ice-restart-delay");
+                    }, RELAY_FALLBACK_DELAY_MS);
+                } else {
+                    triggerRelayFallback("ice-restart-unavailable");
                 }
+                return;
             }
-            if (!relayFallbackTriggered) {
-                relayFallbackTriggered = true;
-                startHostRelayFallback(guestId);
-            }
-            showNotice(
-                els.hostLobbyNotice,
-                "Connection to " + peerEntry.name + " failed on direct path. Trying relay fallback...",
-                "warn"
-            );
+            triggerRelayFallback("repeat-failed-state");
         }
     };
 
@@ -290,7 +310,7 @@ function startHostRelayFallback(guestId) {
     const entry = state.hostPeers.get(guestId);
     if (!entry) return;
     const roomId = state.roomId || state.localId;
-    const relayChannel = createMqttRelayChannel("host", roomId, guestId, {
+    const relayChannel = createMqttRelayChannel("host", roomId, state.localId, {
         onOpen: (channel) => {
             entry.dc = channel;
             onPeerChannelOpen(guestId, channel);
@@ -302,6 +322,14 @@ function startHostRelayFallback(guestId) {
         onMessage: (payload, fromGuestId) => {
             if (fromGuestId !== guestId) return;
             onPeerChannelMessage(guestId, payload, relayChannel);
+        },
+        onFailure: (errorInfo) => {
+            const reason = errorInfo && errorInfo.reason ? errorInfo.reason : "unknown";
+            showNotice(
+                els.hostLobbyNotice,
+                "Relay fallback failed (" + reason + "). Ask " + entry.name + " to regenerate join code or try another network.",
+                "error"
+            );
         }
     });
     entry.dc = relayChannel;

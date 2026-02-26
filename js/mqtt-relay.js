@@ -4,6 +4,7 @@ const MQTT_BROKER_URL = "wss://broker.hivemq.com:8884/mqtt";
 const MQTT_PROTOCOL_LEVEL = 4;
 const MQTT_KEEP_ALIVE_SECONDS = 30;
 const PING_INTERVAL_MS = 20_000;
+const CONNECT_TIMEOUT_MS = 10_000;
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -97,25 +98,33 @@ function parsePublishPayload(body) {
 }
 
 class SimpleMqttClient {
-    constructor({ clientId, subscribeTopic, onOpen, onMessage, onClose }) {
+    constructor({ clientId, subscribeTopic, onOpen, onMessage, onClose, onFailure }) {
         this.clientId = clientId;
         this.subscribeTopic = subscribeTopic;
         this.onOpen = onOpen;
         this.onMessage = onMessage;
         this.onClose = onClose;
+        this.onFailure = onFailure;
         this.ws = null;
         this.packetId = 1;
         this.buffer = new Uint8Array(0);
         this.isConnected = false;
         this.isSubscribed = false;
         this.pingTimer = null;
+        this.connectTimer = null;
+        this.failureNotified = false;
     }
 
     connect() {
         if (this.ws) return;
+        log.info("mqtt", "MQTT relay connect attempt", {
+            clientId: this.clientId,
+            subscribeTopic: this.subscribeTopic
+        });
         const ws = new WebSocket(MQTT_BROKER_URL);
         ws.binaryType = "arraybuffer";
         ws.onopen = () => {
+            log.info("mqtt", "MQTT websocket open", { clientId: this.clientId });
             this.sendRaw(buildConnectPacket(this.clientId));
         };
         ws.onmessage = (event) => {
@@ -124,16 +133,23 @@ class SimpleMqttClient {
             this.processFrames();
         };
         ws.onerror = () => {
-            log.warn("mqtt", "MQTT socket error", { clientId: this.clientId });
+            log.warn("mqtt", "MQTT socket error", { clientId: this.clientId, subscribeTopic: this.subscribeTopic });
+            this.notifyFailure("socket_error");
         };
         ws.onclose = () => {
+            this.clearConnectTimer();
+            if (!this.isSubscribed) {
+                this.notifyFailure("closed_before_open");
+            }
             this.teardown();
             if (typeof this.onClose === "function") this.onClose();
         };
         this.ws = ws;
+        this.startConnectTimer();
     }
 
     close() {
+        this.clearConnectTimer();
         if (!this.ws) return;
         try {
             this.ws.close();
@@ -184,6 +200,7 @@ class SimpleMqttClient {
             this.isConnected = body.length >= 2 && body[1] === 0;
             if (!this.isConnected) {
                 log.warn("mqtt", "MQTT CONNACK refused", { clientId: this.clientId, code: body[1] });
+                this.notifyFailure("connack_refused", { code: body[1] });
                 this.close();
                 return;
             }
@@ -194,6 +211,7 @@ class SimpleMqttClient {
 
         if (packetType === 9) {
             this.isSubscribed = true;
+            this.clearConnectTimer();
             this.startPingLoop();
             if (typeof this.onOpen === "function") this.onOpen();
             return;
@@ -228,8 +246,36 @@ class SimpleMqttClient {
         }
     }
 
+    startConnectTimer() {
+        this.clearConnectTimer();
+        this.connectTimer = setTimeout(() => {
+            if (this.isSubscribed) return;
+            log.warn("mqtt", "MQTT relay connect timeout", {
+                clientId: this.clientId,
+                timeoutMs: CONNECT_TIMEOUT_MS
+            });
+            this.notifyFailure("timeout", { timeoutMs: CONNECT_TIMEOUT_MS });
+            this.close();
+        }, CONNECT_TIMEOUT_MS);
+    }
+
+    clearConnectTimer() {
+        if (!this.connectTimer) return;
+        clearTimeout(this.connectTimer);
+        this.connectTimer = null;
+    }
+
+    notifyFailure(reason, detail = {}) {
+        if (this.failureNotified) return;
+        this.failureNotified = true;
+        if (typeof this.onFailure === "function") {
+            this.onFailure({ reason, ...detail });
+        }
+    }
+
     teardown() {
         this.stopPingLoop();
+        this.clearConnectTimer();
         this.isConnected = false;
         this.isSubscribed = false;
         this.ws = null;
@@ -304,6 +350,16 @@ export function createMqttRelayChannel(role, roomId, localId, callbacks = {}) {
             if (typeof callbacks.onClose === "function") callbacks.onClose();
             if (typeof channel.onclose === "function") channel.onclose();
             log.warn("mqtt", "MQTT relay channel closed", { role: normalizedRole, roomId: String(roomId || "") });
+        },
+        onFailure: (errorInfo) => {
+            if (typeof callbacks.onFailure === "function") {
+                callbacks.onFailure(errorInfo);
+            }
+            log.warn("mqtt", "MQTT relay channel failure", {
+                role: normalizedRole,
+                roomId: String(roomId || ""),
+                ...errorInfo
+            });
         }
     });
 

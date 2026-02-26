@@ -48,7 +48,7 @@ Because this app has no backend, clients exchange signaling data manually:
 5. Host gets a **Response Code** and sends it back.
 6. Guest pastes Response Code and clicks **Connect**.
 7. DataChannel opens and game messages flow peer-to-peer.
-8. If direct ICE fails, the app retries ICE restart, then falls back to MQTT relay.
+8. If direct ICE fails, the app triggers relay fallback shortly after a best-effort ICE restart attempt.
 
 Signaling code details:
 - JSON payloads are compressed with `CompressionStream("deflate")` when available.
@@ -84,6 +84,7 @@ Direct connection remains the primary path:
 - On connection failure, the app attempts `restartIce()` before giving up.
 - If direct connectivity still fails, the app switches to MQTT relay over `wss://broker.hivemq.com:8884/mqtt`.
 - Game message format stays the same across transports; handlers are transport-agnostic.
+- If relay cannot connect, the UI shows a terminal error with next steps instead of hanging.
 
 ### Optional ICE settings
 
@@ -110,11 +111,18 @@ Notes:
 ## Notes / Limitations
 
 - No bundled TURN credentials are shipped by default.
-- MQTT relay uses a public broker and is best-effort infrastructure.
+- MQTT relay uses a free public broker and is best-effort infrastructure.
 - MQTT relay data is protected in transit via TLS to the broker, but broker operators can read plaintext payloads.
 - If host disconnects/closes, the session ends.
 - There is no persistence; state is in-memory only.
 - Browser support for `CompressionStream` may vary. The app falls back to uncompressed code payloads when needed.
+
+## Troubleshooting (Quick)
+
+- If you see direct-path failure: wait a few seconds for relay fallback to activate.
+- If relay also fails: regenerate join/response codes and retry.
+- Try a different network (for example, mobile hotspot) if both direct and relay paths fail.
+- Use **Connection Settings** to add custom STUN/TURN servers if you have your own.
 
 ## Debug Logging
 
