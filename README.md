@@ -11,13 +11,29 @@ It uses:
 
 - `index.html` - UI structure
 - `styles.css` - styling and responsive layout
-- `poker.js` - signaling codec, WebRTC logic, game state, UI wiring
+- `js/main.js` - app entry point and event wiring
+- `js/state.js` - shared state and constants
+- `js/log.js` - in-memory journey logger
+- `js/ui.js` - DOM refs and UI helpers
+- `js/render.js` - rendering functions
+- `js/game.js` - game state logic and stats
+- `js/signaling.js` - signal encode/decode utilities
+- `js/sdp.js` - SDP transform helpers
+- `js/webrtc.js` - peer-connection lifecycle helpers
+- `js/host.js` - host-side flow
+- `js/guest.js` - guest-side flow
 
 ## Run
 
-Open `index.html` in a modern browser (Chrome, Edge, Safari, Firefox).
+Use any static server (modules require `http://`, not `file://`):
 
-No build step, package manager, or local server is required.
+```bash
+python3 -m http.server 8000
+```
+
+Then open `http://127.0.0.1:8000` in a modern browser (Chrome, Edge, Safari, Firefox).
+
+No build step or package manager is required.
 
 ## How Connection Works
 
@@ -58,6 +74,16 @@ Signaling code details:
 - If host disconnects/closes, the session ends.
 - There is no persistence; state is in-memory only.
 - Browser support for `CompressionStream` may vary. The app falls back to uncompressed code payloads when needed.
+
+## Debug Logging
+
+The app keeps an in-memory structured journey log with categories:
+- `init`, `nav`, `host`, `guest`, `webrtc`, `signal`, `game`, `error`
+
+Inspect logs in DevTools:
+- `window.planningPokerLog.getEntries()` for raw entries
+- `window.planningPokerLog.dump()` for table output
+- `window.planningPokerLog.clear()` to reset
 
 ## Sanity References
 
