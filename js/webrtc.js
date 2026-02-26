@@ -1,8 +1,11 @@
 import { state } from "./state.js";
 import { els, setSignalCodeDisplay, showNotice, updateConnectionStatus } from "./ui.js";
 import { log } from "./log.js";
+import { getIceServers } from "./ice-config.js";
 
 const ICE_GATHERING_TIMEOUT_MS = 10_000;
+const ICE_RESTART_MAX_ATTEMPTS = 2;
+const iceRestartAttempts = new WeakMap();
 
 function getSelectedCandidatePair(stats) {
     for (const report of stats.values()) {
@@ -99,11 +102,43 @@ export async function logPeerConnectionDiagnostics(pc, role, extra = {}) {
 
 export function createPeerConnection() {
     const pc = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        iceServers: getIceServers(),
         iceCandidatePoolSize: 0
     });
     log.info("webrtc", "PeerConnection created");
     return pc;
+}
+
+export function attemptIceRestart(pc, extra = {}) {
+    if (!pc || typeof pc.restartIce !== "function") {
+        return false;
+    }
+    const attempts = iceRestartAttempts.get(pc) || 0;
+    if (attempts >= ICE_RESTART_MAX_ATTEMPTS) {
+        log.warn("webrtc", "Skipping ICE restart; max attempts reached", {
+            attempts,
+            ...extra
+        });
+        return false;
+    }
+    const nextAttempt = attempts + 1;
+    iceRestartAttempts.set(pc, nextAttempt);
+    try {
+        pc.restartIce();
+        log.warn("webrtc", "ICE restart requested", {
+            attempt: nextAttempt,
+            maxAttempts: ICE_RESTART_MAX_ATTEMPTS,
+            ...extra
+        });
+        return true;
+    } catch (error) {
+        log.warn("webrtc", "ICE restart failed to start", {
+            attempt: nextAttempt,
+            message: String(error.message || error),
+            ...extra
+        });
+        return false;
+    }
 }
 
 export function waitForIceComplete(pc, timeoutMs = ICE_GATHERING_TIMEOUT_MS) {
@@ -193,6 +228,7 @@ export function shutdownHost(noticeMessage) {
     if (state.role === "host") state.role = "idle";
     state.selectedVote = null;
     state.hostResponseCodeRaw = "";
+    state.roomId = null;
     setSignalCodeDisplay(
         els.hostResponseCode,
         els.hostResponseCodeMeta,
@@ -214,6 +250,7 @@ export function shutdownGuest(noticeMessage) {
     state.guestRemoteState = null;
     state.guestJoinCodeRaw = "";
     state.guestResponseApplied = false;
+    state.roomId = null;
     setSignalCodeDisplay(
         els.guestJoinCode,
         els.guestJoinCodeMeta,

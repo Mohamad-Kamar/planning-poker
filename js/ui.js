@@ -53,7 +53,14 @@ export const els = {
     clearVoteBtn: document.getElementById("clearVoteBtn"),
     hostRevealBtn: document.getElementById("hostRevealBtn"),
     hostResetBtn: document.getElementById("hostResetBtn"),
-    tableNotice: document.getElementById("tableNotice")
+    tableNotice: document.getElementById("tableNotice"),
+    iceSettingsBtn: document.getElementById("iceSettingsBtn"),
+    iceSettingsDialog: document.getElementById("iceSettingsDialog"),
+    defaultIceServersList: document.getElementById("defaultIceServersList"),
+    customIceServersInput: document.getElementById("customIceServersInput"),
+    iceSettingsNotice: document.getElementById("iceSettingsNotice"),
+    iceSettingsCancelBtn: document.getElementById("iceSettingsCancelBtn"),
+    iceSettingsSaveBtn: document.getElementById("iceSettingsSaveBtn")
 };
 
 let onTableViewActivated = null;

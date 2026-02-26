@@ -1,6 +1,13 @@
 import { state, STORAGE_NAME_KEY } from "./state.js";
 import { log } from "./log.js";
 import {
+    DEFAULT_STUN_SERVERS,
+    formatIceServersForInput,
+    loadUserIceServers,
+    parseIceServerInput,
+    saveUserIceServers
+} from "./ice-config.js";
+import {
     copyTextWithFeedback,
     els,
     formatSignalCodeForDisplay,
@@ -134,6 +141,25 @@ function wireEvents() {
         state.displayName = sanitizeName(els.displayNameInput.value);
         storeDisplayName(state.displayName);
     });
+    if (els.iceSettingsBtn) {
+        els.iceSettingsBtn.addEventListener("click", openIceSettingsDialog);
+    }
+    if (els.iceSettingsCancelBtn) {
+        els.iceSettingsCancelBtn.addEventListener("click", () => {
+            if (els.iceSettingsDialog && els.iceSettingsDialog.open) {
+                els.iceSettingsDialog.close();
+            }
+        });
+    }
+    if (els.iceSettingsSaveBtn) {
+        els.iceSettingsSaveBtn.addEventListener("click", onSaveIceSettings);
+    }
+    if (els.iceSettingsDialog) {
+        els.iceSettingsDialog.addEventListener("cancel", (event) => {
+            event.preventDefault();
+            els.iceSettingsDialog.close();
+        });
+    }
 
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
@@ -163,6 +189,36 @@ function wireEvents() {
             }
         }
     });
+}
+
+function openIceSettingsDialog() {
+    if (!els.iceSettingsDialog || typeof els.iceSettingsDialog.showModal !== "function") {
+        showNotice(els.homeNotice, "Connection settings are not supported in this browser.", "warn");
+        return;
+    }
+    const defaultLines = DEFAULT_STUN_SERVERS
+        .map((server) => Array.isArray(server.urls) ? server.urls.join(", ") : server.urls)
+        .join("\n");
+    els.defaultIceServersList.textContent = defaultLines;
+    els.customIceServersInput.value = formatIceServersForInput(loadUserIceServers());
+    showNotice(els.iceSettingsNotice, "", "info");
+    els.iceSettingsDialog.showModal();
+}
+
+function onSaveIceSettings() {
+    const parsedServers = parseIceServerInput(els.customIceServersInput.value);
+    saveUserIceServers(parsedServers);
+    if (els.iceSettingsDialog.open) {
+        els.iceSettingsDialog.close();
+    }
+    showNotice(getCurrentNoticeElement(), "Connection settings saved. New connections will use updated ICE servers.", "info");
+}
+
+function getCurrentNoticeElement() {
+    if (state.currentView === "hostLobby") return els.hostLobbyNotice;
+    if (state.currentView === "guestConnect") return els.guestConnectNotice;
+    if (state.currentView === "table") return els.tableNotice;
+    return els.homeNotice;
 }
 
 function onCreateRoom() {

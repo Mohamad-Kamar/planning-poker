@@ -9,8 +9,11 @@
 <body>
     <div class="container">
         <div class="title-bar">
-            <h1>Planning Poker</h1>
-            <div class="subtle">Zero-server WebRTC with manual handshake</div>
+            <div class="title-copy">
+                <h1>Planning Poker</h1>
+                <div class="subtle">Zero-server WebRTC with manual handshake</div>
+            </div>
+            <button id="iceSettingsBtn" class="btn btn-secondary btn-icon" title="Connection settings">Connection Settings</button>
         </div>
 
         <main>
@@ -168,6 +171,31 @@
             </section>
         </main>
     </div>
+
+    <dialog id="iceSettingsDialog" class="settings-dialog">
+        <div class="settings-stack">
+            <div>
+                <div class="panel-heading">Connection Settings</div>
+                <div class="panel-note">Optional custom ICE servers. One server per line: <span class="mono">urls | username | credential</span></div>
+            </div>
+
+            <div class="stack">
+                <label class="field-label" for="defaultIceServersList">Default STUN Servers</label>
+                <div id="defaultIceServersList" class="code-display mono"></div>
+            </div>
+
+            <div class="stack">
+                <label class="field-label" for="customIceServersInput">Custom ICE Servers (optional)</label>
+                <textarea id="customIceServersInput" class="code-box" placeholder="turn:example.com:3478?transport=tcp | username | password"></textarea>
+                <div id="iceSettingsNotice" class="notice info"></div>
+            </div>
+
+            <div class="row-between">
+                <button id="iceSettingsCancelBtn" class="btn btn-secondary">Cancel</button>
+                <button id="iceSettingsSaveBtn" class="btn btn-primary">Save Settings</button>
+            </div>
+        </div>
+    </dialog>
 
     <script type="module" src="js/main.js"></script>
 </body>

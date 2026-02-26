@@ -3,6 +3,7 @@ import { log } from "./log.js";
 import { decodeSignalCode, encodeSignalCode, validateSignalPayload } from "./signaling.js";
 import { compactFromDescription, descriptionFromCompact } from "./sdp.js";
 import {
+    attemptIceRestart,
     closePeerEntry,
     createPeerConnection,
     logPeerConnectionDiagnostics,
@@ -13,6 +14,7 @@ import {
 import { els, setSignalCodeDisplay, showNotice, showView } from "./ui.js";
 import { getHostPlayersAsArray, hostApplyVote, upsertHostPlayer } from "./game.js";
 import { renderHostLobby, renderTable } from "./render.js";
+import { createMqttRelayChannel } from "./mqtt-relay.js";
 
 let sanitizeNameFn = (name) => String(name || "").trim();
 
@@ -29,6 +31,7 @@ export function startHostSession(displayName) {
     state.role = "host";
     state.selectedVote = null;
     state.hostResponseCodeRaw = "";
+    state.roomId = state.localId;
     setSignalCodeDisplay(
         els.hostResponseCode,
         els.hostResponseCodeMeta,
@@ -145,6 +148,8 @@ export async function acceptGuestOffer(guestId, guestName, offerDescription) {
         connected: false
     };
     let diagnosticsLogged = false;
+    let restartTriggered = false;
+    let relayFallbackTriggered = false;
     const logDiagnosticsOnce = (trigger, failureState) => {
         if (diagnosticsLogged) return;
         diagnosticsLogged = true;
@@ -172,19 +177,32 @@ export async function acceptGuestOffer(guestId, guestName, offerDescription) {
         const status = peerConnection.connectionState;
         log.info("webrtc", "Host connection state", { guestId, state: status });
         if (status === "disconnected" || status === "failed" || status === "closed") {
-            peerEntry.connected = false;
-            upsertHostPlayer(guestId, peerEntry.name, false, sanitizeNameFn);
-            broadcastState();
-            renderHostLobby();
-            renderTable();
+            if (!peerEntry.dc || peerEntry.dc.transportType !== "mqtt-relay") {
+                onPeerChannelClose(guestId);
+            }
         }
         if (status === "failed") {
+            logDiagnosticsOnce("connectionstatechange", "failed");
+            if (!restartTriggered) {
+                restartTriggered = attemptIceRestart(peerConnection, { role: "host", guestId });
+                if (restartTriggered) {
+                    showNotice(
+                        els.hostLobbyNotice,
+                        "Connection to " + peerEntry.name + " failed. Retrying ICE once before relay fallback...",
+                        "warn"
+                    );
+                    return;
+                }
+            }
+            if (!relayFallbackTriggered) {
+                relayFallbackTriggered = true;
+                startHostRelayFallback(guestId);
+            }
             showNotice(
                 els.hostLobbyNotice,
-                "Connection to " + peerEntry.name + " failed. They may be on a restricted network (NAT/firewall).",
+                "Connection to " + peerEntry.name + " failed on direct path. Trying relay fallback...",
                 "warn"
             );
-            logDiagnosticsOnce("connectionstatechange", "failed");
         }
     };
 
@@ -197,6 +215,7 @@ export async function acceptGuestOffer(guestId, guestName, offerDescription) {
         v: 1,
         f: state.localId,
         r: guestId,
+        room: state.roomId || state.localId,
         d: compactFromDescription(peerConnection.localDescription)
     };
     const responseCode = await encodeSignalCode(responsePayload);
@@ -222,19 +241,11 @@ export function setupHostDataChannel(guestId, channel) {
     if (!entry) return;
 
     channel.onopen = () => {
-        entry.connected = true;
-        upsertHostPlayer(guestId, entry.name, true, sanitizeNameFn);
-        broadcastState();
-        renderHostLobby();
-        renderTable();
+        onPeerChannelOpen(guestId, channel);
         log.info("webrtc", "DataChannel opened", { role: "host", guestId, label: channel.label });
     };
     channel.onclose = () => {
-        entry.connected = false;
-        upsertHostPlayer(guestId, entry.name, false, sanitizeNameFn);
-        broadcastState();
-        renderHostLobby();
-        renderTable();
+        onPeerChannelClose(guestId, channel);
         log.warn("webrtc", "DataChannel closed", { role: "host", guestId, label: channel.label });
     };
     channel.onerror = () => {
@@ -242,8 +253,58 @@ export function setupHostDataChannel(guestId, channel) {
         log.warn("webrtc", "DataChannel error", { role: "host", guestId });
     };
     channel.onmessage = (event) => {
-        handleHostInboundMessage(guestId, event.data);
+        onPeerChannelMessage(guestId, event.data, channel);
     };
+}
+
+export function onPeerChannelOpen(guestId, channel) {
+    const entry = state.hostPeers.get(guestId);
+    if (!entry) return;
+    if (channel && entry.dc !== channel) return;
+    entry.connected = true;
+    upsertHostPlayer(guestId, entry.name, true, sanitizeNameFn);
+    broadcastState();
+    renderHostLobby();
+    renderTable();
+}
+
+export function onPeerChannelClose(guestId, channel) {
+    const entry = state.hostPeers.get(guestId);
+    if (!entry) return;
+    if (channel && entry.dc !== channel) return;
+    entry.connected = false;
+    upsertHostPlayer(guestId, entry.name, false, sanitizeNameFn);
+    broadcastState();
+    renderHostLobby();
+    renderTable();
+}
+
+export function onPeerChannelMessage(guestId, rawData, channel) {
+    const entry = state.hostPeers.get(guestId);
+    if (!entry) return;
+    if (channel && entry.dc !== channel) return;
+    handleHostInboundMessage(guestId, rawData);
+}
+
+function startHostRelayFallback(guestId) {
+    const entry = state.hostPeers.get(guestId);
+    if (!entry) return;
+    const roomId = state.roomId || state.localId;
+    const relayChannel = createMqttRelayChannel("host", roomId, guestId, {
+        onOpen: (channel) => {
+            entry.dc = channel;
+            onPeerChannelOpen(guestId, channel);
+            showNotice(els.hostLobbyNotice, "Relay fallback connected for " + entry.name + ".", "info");
+        },
+        onClose: () => {
+            onPeerChannelClose(guestId, relayChannel);
+        },
+        onMessage: (payload, fromGuestId) => {
+            if (fromGuestId !== guestId) return;
+            onPeerChannelMessage(guestId, payload, relayChannel);
+        }
+    });
+    entry.dc = relayChannel;
 }
 
 export function handleHostInboundMessage(guestId, rawData) {
@@ -301,8 +362,14 @@ export function broadcastState() {
 
 export function broadcastMessageToGuests(message) {
     const peers = Array.from(state.hostPeers.values());
+    const sentRelayKeys = new Set();
     for (const peer of peers) {
         if (peer.dc && peer.dc.readyState === "open") {
+            if (peer.dc.transportType === "mqtt-relay") {
+                const relayKey = peer.dc.relayKey || "mqtt-relay";
+                if (sentRelayKeys.has(relayKey)) continue;
+                sentRelayKeys.add(relayKey);
+            }
             sendJson(peer.dc, message);
         }
     }

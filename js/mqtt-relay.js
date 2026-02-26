@@ -1,0 +1,312 @@
+import { log } from "./log.js";
+
+const MQTT_BROKER_URL = "wss://broker.hivemq.com:8884/mqtt";
+const MQTT_PROTOCOL_LEVEL = 4;
+const MQTT_KEEP_ALIVE_SECONDS = 30;
+const PING_INTERVAL_MS = 20_000;
+
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+function encodeString(value) {
+    const bytes = textEncoder.encode(String(value || ""));
+    const output = new Uint8Array(2 + bytes.length);
+    output[0] = (bytes.length >> 8) & 0xff;
+    output[1] = bytes.length & 0xff;
+    output.set(bytes, 2);
+    return output;
+}
+
+function concatBytes(parts) {
+    let totalLength = 0;
+    for (const part of parts) totalLength += part.length;
+    const output = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const part of parts) {
+        output.set(part, offset);
+        offset += part.length;
+    }
+    return output;
+}
+
+function encodeRemainingLength(length) {
+    const bytes = [];
+    let value = length;
+    do {
+        let digit = value % 128;
+        value = Math.floor(value / 128);
+        if (value > 0) digit |= 0x80;
+        bytes.push(digit);
+    } while (value > 0);
+    return new Uint8Array(bytes);
+}
+
+function buildPacket(packetTypeAndFlags, bodyBytes) {
+    const body = bodyBytes || new Uint8Array(0);
+    return concatBytes([
+        new Uint8Array([packetTypeAndFlags]),
+        encodeRemainingLength(body.length),
+        body
+    ]);
+}
+
+function decodeRemainingLength(bytes, offset) {
+    let multiplier = 1;
+    let value = 0;
+    let index = offset;
+    let encodedByte;
+    do {
+        if (index >= bytes.length) return null;
+        encodedByte = bytes[index++];
+        value += (encodedByte & 0x7f) * multiplier;
+        multiplier *= 128;
+    } while ((encodedByte & 0x80) !== 0);
+    return { value, bytesUsed: index - offset };
+}
+
+function buildConnectPacket(clientId) {
+    const variableHeader = concatBytes([
+        encodeString("MQTT"),
+        new Uint8Array([MQTT_PROTOCOL_LEVEL, 0x02, (MQTT_KEEP_ALIVE_SECONDS >> 8) & 0xff, MQTT_KEEP_ALIVE_SECONDS & 0xff])
+    ]);
+    const payload = encodeString(clientId);
+    return buildPacket(0x10, concatBytes([variableHeader, payload]));
+}
+
+function buildSubscribePacket(packetId, topic) {
+    const variableHeader = new Uint8Array([(packetId >> 8) & 0xff, packetId & 0xff]);
+    const payload = concatBytes([encodeString(topic), new Uint8Array([0x00])]);
+    return buildPacket(0x82, concatBytes([variableHeader, payload]));
+}
+
+function buildPublishPacket(topic, messageBytes) {
+    const payloadBytes = messageBytes instanceof Uint8Array ? messageBytes : textEncoder.encode(String(messageBytes || ""));
+    const variableHeader = encodeString(topic);
+    return buildPacket(0x30, concatBytes([variableHeader, payloadBytes]));
+}
+
+function parsePublishPayload(body) {
+    if (body.length < 2) return null;
+    const topicLength = (body[0] << 8) | body[1];
+    const topicStart = 2;
+    const topicEnd = topicStart + topicLength;
+    if (topicEnd > body.length) return null;
+    const topic = textDecoder.decode(body.subarray(topicStart, topicEnd));
+    const payload = textDecoder.decode(body.subarray(topicEnd));
+    return { topic, payload };
+}
+
+class SimpleMqttClient {
+    constructor({ clientId, subscribeTopic, onOpen, onMessage, onClose }) {
+        this.clientId = clientId;
+        this.subscribeTopic = subscribeTopic;
+        this.onOpen = onOpen;
+        this.onMessage = onMessage;
+        this.onClose = onClose;
+        this.ws = null;
+        this.packetId = 1;
+        this.buffer = new Uint8Array(0);
+        this.isConnected = false;
+        this.isSubscribed = false;
+        this.pingTimer = null;
+    }
+
+    connect() {
+        if (this.ws) return;
+        const ws = new WebSocket(MQTT_BROKER_URL);
+        ws.binaryType = "arraybuffer";
+        ws.onopen = () => {
+            this.sendRaw(buildConnectPacket(this.clientId));
+        };
+        ws.onmessage = (event) => {
+            const bytes = new Uint8Array(event.data);
+            this.buffer = concatBytes([this.buffer, bytes]);
+            this.processFrames();
+        };
+        ws.onerror = () => {
+            log.warn("mqtt", "MQTT socket error", { clientId: this.clientId });
+        };
+        ws.onclose = () => {
+            this.teardown();
+            if (typeof this.onClose === "function") this.onClose();
+        };
+        this.ws = ws;
+    }
+
+    close() {
+        if (!this.ws) return;
+        try {
+            this.ws.close();
+        } catch (_error) {
+            // Ignore socket close failures.
+        }
+    }
+
+    send(topic, textPayload) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.isSubscribed) {
+            throw new Error("MQTT relay is not open.");
+        }
+        this.sendRaw(buildPublishPacket(topic, textPayload));
+    }
+
+    nextPacketId() {
+        const id = this.packetId;
+        this.packetId += 1;
+        if (this.packetId > 0xffff) this.packetId = 1;
+        return id;
+    }
+
+    sendRaw(bytes) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        this.ws.send(bytes);
+    }
+
+    processFrames() {
+        let offset = 0;
+        while (offset < this.buffer.length) {
+            if (offset + 2 > this.buffer.length) break;
+            const header = this.buffer[offset];
+            const remaining = decodeRemainingLength(this.buffer, offset + 1);
+            if (!remaining) break;
+            const frameStart = offset + 1 + remaining.bytesUsed;
+            const frameEnd = frameStart + remaining.value;
+            if (frameEnd > this.buffer.length) break;
+            const body = this.buffer.subarray(frameStart, frameEnd);
+            this.handleFrame(header, body);
+            offset = frameEnd;
+        }
+        this.buffer = this.buffer.subarray(offset);
+    }
+
+    handleFrame(header, body) {
+        const packetType = header >> 4;
+        if (packetType === 2) {
+            this.isConnected = body.length >= 2 && body[1] === 0;
+            if (!this.isConnected) {
+                log.warn("mqtt", "MQTT CONNACK refused", { clientId: this.clientId, code: body[1] });
+                this.close();
+                return;
+            }
+            const packetId = this.nextPacketId();
+            this.sendRaw(buildSubscribePacket(packetId, this.subscribeTopic));
+            return;
+        }
+
+        if (packetType === 9) {
+            this.isSubscribed = true;
+            this.startPingLoop();
+            if (typeof this.onOpen === "function") this.onOpen();
+            return;
+        }
+
+        if (packetType === 3) {
+            const parsed = parsePublishPayload(body);
+            if (parsed && typeof this.onMessage === "function") {
+                this.onMessage(parsed.topic, parsed.payload);
+            }
+            return;
+        }
+
+        if (packetType === 13) {
+            return;
+        }
+    }
+
+    startPingLoop() {
+        this.stopPingLoop();
+        this.pingTimer = setInterval(() => {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.sendRaw(new Uint8Array([0xc0, 0x00]));
+            }
+        }, PING_INTERVAL_MS);
+    }
+
+    stopPingLoop() {
+        if (this.pingTimer) {
+            clearInterval(this.pingTimer);
+            this.pingTimer = null;
+        }
+    }
+
+    teardown() {
+        this.stopPingLoop();
+        this.isConnected = false;
+        this.isSubscribed = false;
+        this.ws = null;
+        this.buffer = new Uint8Array(0);
+    }
+}
+
+function getTopics(roomId) {
+    const safeRoomId = String(roomId || "").trim();
+    return {
+        hostInbound: "pp/" + safeRoomId + "/h",
+        guestInbound: "pp/" + safeRoomId + "/g"
+    };
+}
+
+export function createMqttRelayChannel(role, roomId, localId, callbacks = {}) {
+    const normalizedRole = role === "host" ? "host" : "guest";
+    const topics = getTopics(roomId);
+    const subscribeTopic = normalizedRole === "host" ? topics.hostInbound : topics.guestInbound;
+    const publishTopic = normalizedRole === "host" ? topics.guestInbound : topics.hostInbound;
+    const clientId = "planning-poker-" + normalizedRole + "-" + String(localId || "").slice(0, 12) + "-" + Date.now().toString(36);
+
+    const channel = {
+        readyState: "connecting",
+        transportType: "mqtt-relay",
+        relayKey: normalizedRole + ":" + String(roomId || ""),
+        onopen: null,
+        onclose: null,
+        onmessage: null,
+        close() {
+            mqttClient.close();
+        },
+        send(data) {
+            const payload = String(data || "");
+            if (normalizedRole === "guest") {
+                const wrapped = JSON.stringify({ _from: localId, _d: payload });
+                mqttClient.send(publishTopic, wrapped);
+                return;
+            }
+            mqttClient.send(publishTopic, payload);
+        }
+    };
+
+    const mqttClient = new SimpleMqttClient({
+        clientId,
+        subscribeTopic,
+        onOpen: () => {
+            channel.readyState = "open";
+            if (typeof callbacks.onOpen === "function") callbacks.onOpen(channel);
+            if (typeof channel.onopen === "function") channel.onopen();
+            log.info("mqtt", "MQTT relay channel open", { role: normalizedRole, roomId: String(roomId || "") });
+        },
+        onMessage: (_topic, payload) => {
+            if (normalizedRole === "host") {
+                let envelope;
+                try {
+                    envelope = JSON.parse(payload);
+                } catch (_error) {
+                    return;
+                }
+                if (!envelope || typeof envelope !== "object" || typeof envelope._d !== "string") return;
+                const fromGuestId = String(envelope._from || "");
+                if (typeof callbacks.onMessage === "function") callbacks.onMessage(envelope._d, fromGuestId);
+                if (typeof channel.onmessage === "function") channel.onmessage({ data: envelope._d, guestId: fromGuestId });
+                return;
+            }
+            if (typeof callbacks.onMessage === "function") callbacks.onMessage(payload, null);
+            if (typeof channel.onmessage === "function") channel.onmessage({ data: payload });
+        },
+        onClose: () => {
+            channel.readyState = "closed";
+            if (typeof callbacks.onClose === "function") callbacks.onClose();
+            if (typeof channel.onclose === "function") channel.onclose();
+            log.warn("mqtt", "MQTT relay channel closed", { role: normalizedRole, roomId: String(roomId || "") });
+        }
+    });
+
+    mqttClient.connect();
+    return channel;
+}

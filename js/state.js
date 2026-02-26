@@ -15,7 +15,8 @@ export const state = {
     guestJoinCodeRaw: "",
     hostResponseCodeRaw: "",
     guestResponseApplied: false,
-    currentView: "home"
+    currentView: "home",
+    roomId: null
 };
 
 export function createShortId() {

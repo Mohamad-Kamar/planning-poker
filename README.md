@@ -19,6 +19,8 @@ It uses:
 - `js/game.js` - game state logic and stats
 - `js/signaling.js` - signal encode/decode utilities
 - `js/sdp.js` - SDP transform helpers
+- `js/ice-config.js` - ICE server defaults + user settings persistence
+- `js/mqtt-relay.js` - minimal MQTT relay transport over WebSocket
 - `js/webrtc.js` - peer-connection lifecycle helpers
 - `js/host.js` - host-side flow
 - `js/guest.js` - guest-side flow
@@ -46,6 +48,7 @@ Because this app has no backend, clients exchange signaling data manually:
 5. Host gets a **Response Code** and sends it back.
 6. Guest pastes Response Code and clicks **Connect**.
 7. DataChannel opens and game messages flow peer-to-peer.
+8. If direct ICE fails, the app retries ICE restart, then falls back to MQTT relay.
 
 Signaling code details:
 - JSON payloads are compressed with `CompressionStream("deflate")` when available.
@@ -68,9 +71,47 @@ Signaling code details:
 - Host reveals votes.
 - Host resets for a new round.
 
+## Connection Resilience and Fallback
+
+Direct connection remains the primary path:
+
+- Uses multiple public STUN servers by default:
+  - `stun:stun.l.google.com:19302`
+  - `stun:stun1.l.google.com:19302`
+  - `stun:stun.cloudflare.com:3478`
+  - `stun:stun.services.mozilla.com:3478`
+  - `stun:global.stun.twilio.com:3478`
+- On connection failure, the app attempts `restartIce()` before giving up.
+- If direct connectivity still fails, the app switches to MQTT relay over `wss://broker.hivemq.com:8884/mqtt`.
+- Game message format stays the same across transports; handlers are transport-agnostic.
+
+### Optional ICE settings
+
+Use the **Connection Settings** button in the header to add custom ICE servers.
+
+Input format (one server per line):
+
+```text
+urls | username | credential
+```
+
+Examples:
+
+```text
+turn:example.com:3478?transport=tcp | alice | s3cret
+stun:stun.example.com:3478
+```
+
+Notes:
+- `urls` can be a single URL or a comma-separated list.
+- `username` and `credential` are optional (typically needed for TURN).
+- Settings are stored in `localStorage` and applied to newly created peer connections.
+
 ## Notes / Limitations
 
-- No TURN server is used (by design). Some strict corporate/firewalled networks may fail to connect.
+- No bundled TURN credentials are shipped by default.
+- MQTT relay uses a public broker and is best-effort infrastructure.
+- MQTT relay data is protected in transit via TLS to the broker, but broker operators can read plaintext payloads.
 - If host disconnects/closes, the session ends.
 - There is no persistence; state is in-memory only.
 - Browser support for `CompressionStream` may vary. The app falls back to uncompressed code payloads when needed.
