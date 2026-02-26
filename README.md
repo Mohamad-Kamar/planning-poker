@@ -34,7 +34,7 @@ Because this app has no backend, clients exchange signaling data manually:
 Signaling code details:
 - JSON payloads are compressed with `CompressionStream("deflate")` when available.
 - Encoded as URL-safe base64.
-- SDP is compacted into essential fields (`ice-ufrag`, `ice-pwd`, fingerprint, candidates), then reconstructed on decode.
+- SDP is transported as the full browser-generated SDP for better cross-browser reliability.
 - Codes are shown grouped for readability; pasted codes can include whitespace/newlines.
 - Each code box supports two copy modes:
   - **Copy Plain**: compact single-line string (best for reliability).

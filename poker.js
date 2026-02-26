@@ -16,6 +16,7 @@ const state = {
     guestRemoteState: null,
     guestJoinCodeRaw: "",
     hostResponseCodeRaw: "",
+    guestResponseApplied: false,
     currentView: "homeView"
 };
 
@@ -228,6 +229,7 @@ function onJoinRoom() {
     state.role = "guest";
     state.selectedVote = null;
     state.guestRemoteState = null;
+    state.guestResponseApplied = false;
     showView("guestConnect");
     onRegenerateGuestOffer();
 }
@@ -235,6 +237,8 @@ function onJoinRoom() {
 async function onRegenerateGuestOffer() {
     try {
         state.role = "guest";
+        state.guestResponseApplied = false;
+        els.connectGuestBtn.disabled = false;
         setGuestStep(1);
         showNotice(els.guestConnectNotice, "Generating join code...", "info");
         state.guestJoinCodeRaw = "";
@@ -266,6 +270,10 @@ async function onGuestConnectWithResponseCode() {
         showNotice(els.guestConnectNotice, "Paste a host response code first.", "warn");
         return;
     }
+    if (state.guestResponseApplied) {
+        showNotice(els.guestConnectNotice, "Response already applied. Waiting for data channel; regenerate only if you need a fresh join code.", "warn");
+        return;
+    }
 
     try {
         setGuestStep(2);
@@ -280,6 +288,8 @@ async function onGuestConnectWithResponseCode() {
 
         const answerDescription = descriptionFromCompact(payload.d);
         await state.guestPeer.setRemoteDescription(answerDescription);
+        state.guestResponseApplied = true;
+        els.connectGuestBtn.disabled = true;
         showNotice(els.guestConnectNotice, "Response accepted. Waiting for data channel...", "info");
     } catch (error) {
         showNotice(els.guestConnectNotice, "Could not apply response code: " + String(error.message || error), "error");
@@ -639,6 +649,7 @@ async function createGuestOfferCode() {
     els.copyGuestJoinCodeBtn.disabled = false;
     els.copyGuestJoinCodeFormattedBtn.disabled = false;
     els.guestResponseCodeInput.value = "";
+    els.connectGuestBtn.disabled = false;
 }
 
 async function acceptGuestOffer(guestId, guestName, offerDescription) {
@@ -937,6 +948,7 @@ function shutdownGuest(noticeMessage) {
     resetGuestConnection();
     state.guestRemoteState = null;
     state.guestJoinCodeRaw = "";
+    state.guestResponseApplied = false;
     setSignalCodeDisplay(
         els.guestJoinCode,
         els.guestJoinCodeMeta,
@@ -948,6 +960,7 @@ function shutdownGuest(noticeMessage) {
     );
     els.copyGuestJoinCodeBtn.disabled = true;
     els.copyGuestJoinCodeFormattedBtn.disabled = true;
+    els.connectGuestBtn.disabled = false;
     if (state.role === "guest") state.role = "idle";
     updateConnectionStatus(false, "Not connected");
     if (noticeMessage) showNotice(els.homeNotice, noticeMessage, "info");
@@ -1194,51 +1207,32 @@ function base64UrlToBytes(base64url) {
 }
 
 function compactFromDescription(description) {
-    const type = description.type;
-    const sdp = description.sdp || "";
-    const lines = sdp.split(/\r?\n/);
-
-    let ufrag = "";
-    let pwd = "";
-    let fingerprint = "";
-    const candidates = [];
-
-    for (const line of lines) {
-        if (!line) continue;
-        if (line.startsWith("a=ice-ufrag:")) {
-            ufrag = line.slice("a=ice-ufrag:".length).trim();
-            continue;
-        }
-        if (line.startsWith("a=ice-pwd:")) {
-            pwd = line.slice("a=ice-pwd:".length).trim();
-            continue;
-        }
-        if (line.startsWith("a=fingerprint:sha-256 ")) {
-            fingerprint = line.slice("a=fingerprint:sha-256 ".length).replace(/:/g, "").toLowerCase();
-            continue;
-        }
-        if (line.startsWith("a=candidate:")) {
-            const parsed = parseCandidate(line.slice("a=candidate:".length));
-            if (parsed) candidates.push(parsed);
-        }
+    if (!description || !description.type || !description.sdp) {
+        throw new Error("Missing local session description.");
     }
-
-    if (!ufrag || !pwd || !fingerprint) {
-        throw new Error("Could not extract essential SDP fields.");
-    }
-
+    // Preserve exact browser SDP for maximum compatibility between browsers.
     return {
-        t: type, // offer | answer
-        u: ufrag,
-        p: pwd,
-        f: fingerprint,
-        c: candidates
+        t: description.type,
+        s: description.sdp
     };
 }
 
 function descriptionFromCompact(compact) {
-    if (!compact || !compact.t || !compact.u || !compact.p || !compact.f) {
-        throw new Error("Incomplete compact SDP.");
+    if (!compact || !compact.t) {
+        throw new Error("Incomplete compact SDP payload.");
+    }
+
+    // Preferred path: full SDP payload (reliable).
+    if (typeof compact.s === "string" && compact.s.length > 0) {
+        return {
+            type: compact.t,
+            sdp: compact.s
+        };
+    }
+
+    // Backward-compatible fallback for older compact codes.
+    if (!compact.u || !compact.p || !compact.f) {
+        throw new Error("Incomplete legacy SDP payload.");
     }
     const setup = normalizeSetup(compact.t);
     const fingerprint = formatFingerprint(compact.f);
