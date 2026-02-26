@@ -39,6 +39,7 @@ import {
     startGuestSession
 } from "./guest.js";
 import { shutdownGuest, shutdownHost } from "./webrtc.js";
+import { clearSessionSnapshot, loadSessionSnapshot, saveSessionSnapshot } from "./persistence.js";
 
 init();
 
@@ -87,10 +88,16 @@ function init() {
         "Shareability: waiting for code"
     );
 
-    updateConnectionStatus(false, "Not connected");
-    showView("home");
+    const restored = restoreSessionFromSnapshot(loadSessionSnapshot());
+    if (!restored) {
+        updateConnectionStatus(false, "Not connected");
+        showView("home");
+    }
     window.planningPokerLog = log;
-    log.info("init", "Application initialized", { restoredName: state.displayName || null });
+    log.info("init", "Application initialized", {
+        restoredName: state.displayName || null,
+        restoredSession: restored ? state.role : null
+    });
 }
 
 function wireEvents() {
@@ -110,6 +117,7 @@ function wireEvents() {
     els.hostStartGameBtn.addEventListener("click", onHostStartGame);
     els.hostBackHomeBtn.addEventListener("click", () => {
         shutdownHost("Session closed.");
+        clearSessionSnapshot();
         showView("home");
     });
 
@@ -124,6 +132,7 @@ function wireEvents() {
     els.connectGuestBtn.addEventListener("click", onGuestConnectWithResponseCode);
     els.guestBackHomeBtn.addEventListener("click", () => {
         shutdownGuest("Join canceled.");
+        clearSessionSnapshot();
         showView("home");
     });
 
@@ -148,6 +157,7 @@ function wireEvents() {
         state.displayName = sanitizeName(els.displayNameInput.value);
         storeDisplayName(state.displayName);
         updateCurrentUserBadge(state.displayName);
+        saveSessionSnapshot();
     });
     window.addEventListener("pagehide", onPageHide);
     if (els.iceSettingsBtn) {
@@ -174,11 +184,13 @@ function wireEvents() {
         if (event.key === "Escape") {
             if (state.currentView === "guestConnect") {
                 shutdownGuest("Join canceled.");
+                clearSessionSnapshot();
                 showView("home");
                 return;
             }
             if (state.currentView === "hostLobby") {
                 shutdownHost("Session closed.");
+                clearSessionSnapshot();
                 showView("home");
                 return;
             }
@@ -247,19 +259,32 @@ function onLeaveOrBack() {
         if (state.currentView === "table") {
             showView("hostLobby");
             renderHostLobby();
+            saveSessionSnapshot();
             return;
         }
         shutdownHost("Session closed.");
+        clearSessionSnapshot();
         showView("home");
+        return;
+    }
+
+    if (state.currentView === "table" && !isGuestConnected()) {
+        showView("guestConnect");
+        setGuestStep(1);
+        showNotice(els.guestConnectNotice, "Session restored. Share a fresh join code with host to reconnect.", "info");
+        void onRegenerateGuestOffer();
+        saveSessionSnapshot();
         return;
     }
 
     notifyGuestLeaving();
     shutdownGuest("Disconnected.");
+    clearSessionSnapshot();
     showView("home");
 }
 
 function onPageHide() {
+    saveSessionSnapshot();
     if (state.role === "guest") {
         notifyGuestLeaving();
         shutdownGuest();
@@ -282,6 +307,116 @@ function ensureDisplayName() {
     els.displayNameInput.value = name;
     updateCurrentUserBadge(name);
     return name;
+}
+
+function restoreSessionFromSnapshot(snapshot) {
+    if (!snapshot) return false;
+
+    state.localId = snapshot.localId;
+    if (snapshot.displayName) {
+        state.displayName = snapshot.displayName;
+        els.displayNameInput.value = snapshot.displayName;
+        updateCurrentUserBadge(snapshot.displayName);
+    }
+
+    if (snapshot.role === "host") {
+        restoreHostSnapshot(snapshot);
+        return true;
+    }
+    if (snapshot.role === "guest") {
+        restoreGuestSnapshot(snapshot);
+        return true;
+    }
+    return false;
+}
+
+function restoreHostSnapshot(snapshot) {
+    state.role = "host";
+    state.selectedVote = snapshot.selectedVote;
+    state.roomId = snapshot.roomId || snapshot.localId;
+    state.session = snapshot.session;
+    state.hostPeers.clear();
+    state.hostResponseCodeRaw = "";
+    state.guestPeer = null;
+    state.guestChannel = null;
+    state.guestRemoteState = null;
+    state.guestJoinCodeRaw = "";
+    state.guestResponseApplied = false;
+    els.hostIncomingJoinCode.value = "";
+    els.copyHostResponseCodeBtn.disabled = true;
+    els.copyHostResponseCodeFormattedBtn.disabled = true;
+    setSignalCodeDisplay(
+        els.hostResponseCode,
+        els.hostResponseCodeMeta,
+        els.hostResponseCodeQuality,
+        "",
+        "No response code yet.",
+        "Waiting for guest join code.",
+        "Shareability: waiting for code"
+    );
+    renderHostLobby();
+
+    if (snapshot.currentView === "table") {
+        showView("table");
+        renderTable();
+        showNotice(
+            els.tableNotice,
+            "Session restored after refresh. Guests need a fresh join and response code exchange to reconnect.",
+            "warn"
+        );
+    } else {
+        showView("hostLobby");
+        showNotice(
+            els.hostLobbyNotice,
+            "Session restored after refresh. Guests need a fresh join and response code exchange to reconnect.",
+            "warn"
+        );
+    }
+    saveSessionSnapshot();
+}
+
+function restoreGuestSnapshot(snapshot) {
+    state.role = "guest";
+    state.selectedVote = snapshot.selectedVote;
+    state.roomId = snapshot.roomId || null;
+    state.guestRemoteState = snapshot.guestRemoteState;
+    state.guestPeer = null;
+    state.guestChannel = null;
+    state.guestJoinCodeRaw = "";
+    state.guestResponseApplied = false;
+    state.session = null;
+    state.hostPeers.clear();
+    state.hostResponseCodeRaw = "";
+    setGuestStep(1);
+    els.guestResponseCodeInput.value = "";
+    els.copyGuestJoinCodeBtn.disabled = true;
+    els.copyGuestJoinCodeFormattedBtn.disabled = true;
+    els.connectGuestBtn.disabled = false;
+    setSignalCodeDisplay(
+        els.guestJoinCode,
+        els.guestJoinCodeMeta,
+        els.guestJoinCodeQuality,
+        "",
+        "Generating code...",
+        "Preparing connection details.",
+        "Shareability: waiting for code"
+    );
+    updateConnectionStatus(false, "Disconnected");
+
+    if (snapshot.currentView === "table" && snapshot.guestRemoteState) {
+        showView("table");
+        renderTable();
+        showNotice(els.tableNotice, "Session restored. Click Reconnect to generate a fresh join code.", "warn");
+    } else {
+        showView("guestConnect");
+        showNotice(els.guestConnectNotice, "Session restored. Generating a fresh join code...", "info");
+        void onRegenerateGuestOffer();
+    }
+    saveSessionSnapshot();
+}
+
+function isGuestConnected() {
+    return !!(state.guestChannel && state.guestChannel.readyState === "open");
 }
 
 export function sanitizeName(name) {

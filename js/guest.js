@@ -14,6 +14,7 @@ import {
 import { els, setGuestStep, setSignalCodeDisplay, showNotice, showView, updateConnectionStatus } from "./ui.js";
 import { renderTable } from "./render.js";
 import { createMqttRelayChannel } from "./mqtt-relay.js";
+import { saveSessionSnapshot } from "./persistence.js";
 
 const RELAY_FALLBACK_DELAY_MS = 2500;
 
@@ -30,6 +31,7 @@ export function startGuestSession(displayName) {
 
     showView("guestConnect");
     onRegenerateGuestOffer();
+    saveSessionSnapshot();
     log.info("guest", "Join room clicked", { name: displayName });
 }
 
@@ -52,11 +54,14 @@ export async function onRegenerateGuestOffer() {
             "Preparing connection details.",
             "Shareability: waiting for code"
         );
+        saveSessionSnapshot();
         await createGuestOfferCode();
         showNotice(els.guestConnectNotice, "Share this join code with the host. Then paste the response code.", "info");
+        saveSessionSnapshot();
     } catch (error) {
         log.error("error", "Failed to generate guest offer", { message: String(error.message || error) });
         showNotice(els.guestConnectNotice, "Could not generate join code: " + String(error.message || error), "error");
+        saveSessionSnapshot();
     }
 }
 
@@ -92,6 +97,7 @@ export async function onGuestConnectWithResponseCode() {
         state.guestResponseApplied = true;
         els.connectGuestBtn.disabled = true;
         showNotice(els.guestConnectNotice, "Response accepted. Waiting for data channel...", "info");
+        saveSessionSnapshot();
         log.info("guest", "Response applied", {
             answerSdpLength: (answerDescription.sdp || "").length
         });
@@ -236,6 +242,7 @@ export function onHostChannelOpen(channel) {
     showView("table");
     renderTable();
     showNotice(els.tableNotice, "Connected. Pick your card.", "info", 1400);
+    saveSessionSnapshot();
 }
 
 export function onHostChannelClose(channel) {
@@ -244,6 +251,7 @@ export function onHostChannelClose(channel) {
     if (state.role === "guest") {
         showNotice(els.tableNotice, "Connection closed.", "warn");
     }
+    saveSessionSnapshot();
 }
 
 export function onHostChannelMessage(rawData, channel) {
@@ -313,6 +321,7 @@ export function handleGuestInboundMessage(rawData) {
             showView("table");
         }
         renderTable();
+        saveSessionSnapshot();
         return;
     }
 
@@ -330,6 +339,7 @@ export function handleGuestInboundMessage(rawData) {
             state.guestRemoteState.players = Object.values(byId);
         }
         renderTable();
+        saveSessionSnapshot();
         return;
     }
 
@@ -346,6 +356,7 @@ export function handleGuestInboundMessage(rawData) {
             }));
         }
         renderTable();
+        saveSessionSnapshot();
     }
 }
 

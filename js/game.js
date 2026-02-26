@@ -1,10 +1,12 @@
 import { NUMERIC_VOTES, VOTE_VALUES, state } from "./state.js";
 import { log } from "./log.js";
+import { saveSessionSnapshot } from "./persistence.js";
 
 export function setLocalVote(vote, deps) {
     if (vote !== null && !VOTE_VALUES.includes(vote)) return;
 
     state.selectedVote = vote;
+    saveSessionSnapshot();
     deps.renderVotePalette();
 
     if (state.role === "host") {

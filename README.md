@@ -114,7 +114,8 @@ Notes:
 - MQTT relay uses a free public broker and is best-effort infrastructure.
 - MQTT relay data is protected in transit via TLS to the broker, but broker operators can read plaintext payloads.
 - If host disconnects/closes, the session ends.
-- There is no persistence; state is in-memory only.
+- Session snapshot is stored in `sessionStorage`, so refresh in the same tab can restore room/table context.
+- Live transport objects are not restorable after refresh; host/guests still need a fresh manual code exchange to reconnect.
 - Browser support for `CompressionStream` may vary. The app falls back to uncompressed code payloads when needed.
 
 ## Troubleshooting (Quick)

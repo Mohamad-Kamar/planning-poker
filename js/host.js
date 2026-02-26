@@ -15,6 +15,7 @@ import { els, setSignalCodeDisplay, showNotice, showView } from "./ui.js";
 import { getHostPlayersAsArray, hostApplyVote, removeHostPlayer, upsertHostPlayer } from "./game.js";
 import { renderHostLobby, renderTable } from "./render.js";
 import { createMqttRelayChannel } from "./mqtt-relay.js";
+import { saveSessionSnapshot } from "./persistence.js";
 
 let sanitizeNameFn = (name) => String(name || "").trim();
 const RELAY_FALLBACK_DELAY_MS = 2500;
@@ -54,6 +55,7 @@ export function startHostSession(displayName) {
     renderHostLobby();
     showView("hostLobby");
     showNotice(els.hostLobbyNotice, "Room created. Ask a teammate to click Join Room and send you their join code.", "info");
+    saveSessionSnapshot();
     log.info("host", "Room created", { hostId: state.localId, name: displayName });
 }
 
@@ -64,6 +66,7 @@ export function onHostStartGame() {
     renderHostLobby();
     showView("table");
     renderTable();
+    saveSessionSnapshot();
     log.info("game", "Game started", { round: state.session.round });
 }
 
@@ -260,6 +263,7 @@ export async function acceptGuestOffer(guestId, guestName, offerDescription) {
     );
     showNotice(els.hostLobbyNotice, "Accepted " + guestName + ". Copy response code and send it back.", "info");
     renderHostLobby();
+    saveSessionSnapshot();
     log.info("host", "Answer created", {
         guestId,
         codeLength: responseCode.length,
@@ -403,6 +407,7 @@ export function broadcastState() {
         })
     };
     broadcastMessageToGuests(payload);
+    saveSessionSnapshot();
     log.info("host", "State broadcast", { players: payload.players.length, round: payload.round });
 }
 

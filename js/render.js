@@ -34,8 +34,9 @@ export function renderHostLobby() {
 
 export function renderTable() {
     const isHost = state.role === "host";
+    const isGuestConnected = !!(state.guestChannel && state.guestChannel.readyState === "open");
     els.tableRoleChip.textContent = isHost ? "Host" : "Guest";
-    els.leaveSessionBtn.textContent = isHost ? "Back to Lobby" : "Leave";
+    els.leaveSessionBtn.textContent = isHost ? "Back to Lobby" : (isGuestConnected ? "Leave" : "Reconnect");
     els.hostRevealBtn.style.display = isHost ? "inline-block" : "none";
     els.hostResetBtn.style.display = isHost ? "inline-block" : "none";
 
@@ -70,7 +71,9 @@ export function renderTable() {
     if (isHost) {
         const connected = players.filter((p) => p.connected).length;
         updateConnectionStatus(true, "Hosting " + Math.max(0, connected - 1) + " guest(s)");
+        return;
     }
+    updateConnectionStatus(isGuestConnected, isGuestConnected ? "Connected to host" : "Disconnected");
 }
 
 export function renderTablePlayers(players) {
