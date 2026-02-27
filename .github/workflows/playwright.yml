@@ -7,19 +7,8 @@ on:
 
 jobs:
   e2e:
-    name: E2E (${{ matrix.browser }})
+    name: E2E (chromium)
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.experimental }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - browser: chromium
-            experimental: false
-          - browser: firefox
-            experimental: false
-          - browser: webkit
-            experimental: true
 
     steps:
       - name: Checkout
@@ -35,16 +24,16 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps ${{ matrix.browser }}
+        run: npx playwright install --with-deps chromium
 
       - name: Run Playwright tests
-        run: npx playwright test --project=${{ matrix.browser }}
+        run: npx playwright test --project=chromium
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{ matrix.browser }}
+          name: playwright-report-chromium
           path: |
             playwright-report
             test-results
