@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { createHost, openHome, readCode } = require("../helpers");
+const { createHost, openHome, readCode, setConnectionMode } = require("../helpers");
 
 test("escape exits guest connect view back to home", async ({ page }) => {
     await openHome(page);
@@ -22,6 +22,7 @@ test("escape exits host lobby view back to home", async ({ page }) => {
 
 test("enter submits host join code input", async ({ page }) => {
     await openHome(page);
+    await setConnectionMode(page, "manualWebRtc");
     await createHost(page, "HostEnter");
 
     await page.locator("#hostIncomingJoinCode").fill("invalid-code");
@@ -31,6 +32,7 @@ test("enter submits host join code input", async ({ page }) => {
 
 test("enter submits guest response code input", async ({ page }) => {
     await openHome(page);
+    await setConnectionMode(page, "manualWebRtc");
     await page.locator("#displayNameInput").fill("GuestEnter");
     await page.locator("#joinRoomBtn").click();
     await expect(page.locator("#guestConnectView.active")).toBeVisible();
@@ -43,6 +45,7 @@ test("enter submits guest response code input", async ({ page }) => {
 
 test("host rejects malformed guest join code", async ({ page }) => {
     await openHome(page);
+    await setConnectionMode(page, "manualWebRtc");
     await createHost(page, "HostBadJoin");
 
     await page.locator("#hostIncomingJoinCode").fill("not-a-valid-join-code");
@@ -52,6 +55,7 @@ test("host rejects malformed guest join code", async ({ page }) => {
 
 test("guest rejects malformed host response code", async ({ page }) => {
     await openHome(page);
+    await setConnectionMode(page, "manualWebRtc");
     await page.locator("#displayNameInput").fill("GuestBadResp");
     await page.locator("#joinRoomBtn").click();
     await expect(page.locator("#copyGuestJoinCodeBtn")).toBeEnabled();
@@ -70,6 +74,9 @@ test("guest rejects response code intended for a different guest", async ({ brow
     await openHome(host);
     await openHome(guestA);
     await openHome(guestB);
+    await setConnectionMode(host, "manualWebRtc");
+    await setConnectionMode(guestA, "manualWebRtc");
+    await setConnectionMode(guestB, "manualWebRtc");
     await createHost(host, "HostWrongTarget");
 
     await guestA.locator("#displayNameInput").fill("GuestA");

@@ -63,11 +63,10 @@ test("guest reconnect path from disconnected table returns to join flow", async 
     await page.getByTestId("btn-leave-session").click();
 
     await expect(page.locator("#guestConnectView.active")).toBeVisible();
-    await expect(page.locator("#guestStep1")).toHaveClass(/active/);
     await expect(page.locator("#guestConnectNotice")).toContainText(
-        /Session restored|Share this join code with the host/
+        /Session restored|Retrying relay reconnect/
     );
-    await expect(page.locator("#copyGuestJoinCodeBtn")).toBeEnabled();
+    await expect(page.locator("#guestRoomCodeInput")).toHaveValue("room-reconnect");
 });
 
 test("display name is sanitized and restored after reload", async ({ page }) => {

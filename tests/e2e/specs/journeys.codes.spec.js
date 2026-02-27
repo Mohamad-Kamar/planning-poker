@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { createHost, openHome, readCode } = require("../helpers");
+const { createHost, openHome, readCode, setConnectionMode } = require("../helpers");
 
 function normalizeWhitespace(value) {
     return String(value || "").replace(/\s+/g, "");
@@ -8,6 +8,7 @@ function normalizeWhitespace(value) {
 test("host clear button resets incoming join code textarea", async ({ page }) => {
     await openHome(page);
     await createHost(page, "HostClearAction");
+    await page.locator("#hostManualFallbackDetails > summary").click();
 
     await page.getByTestId("input-host-join-code").fill("some-join-code");
     await page.getByTestId("btn-clear-host-join-code").click();
@@ -16,6 +17,7 @@ test("host clear button resets incoming join code textarea", async ({ page }) =>
 
 test("guest regenerate creates a fresh join code and resets step state", async ({ page }) => {
     await openHome(page);
+    await setConnectionMode(page, "manualWebRtc");
     await page.locator("#displayNameInput").fill("GuestRegenerate");
     await page.getByTestId("btn-join-room").click();
 
@@ -47,6 +49,7 @@ test("guest copy plain and formatted buttons copy expected values", async ({ bro
     const page = await context.newPage();
 
     await openHome(page);
+    await setConnectionMode(page, "manualWebRtc");
     await page.locator("#displayNameInput").fill("GuestCopy");
     await page.getByTestId("btn-join-room").click();
     await expect(page.locator("#copyGuestJoinCodeBtn")).toBeEnabled();
@@ -83,6 +86,8 @@ test("host copy plain and formatted response buttons copy expected values", asyn
 
     await openHome(host);
     await openHome(guest);
+    await setConnectionMode(host, "manualWebRtc");
+    await setConnectionMode(guest, "manualWebRtc");
     await createHost(host, "HostCopy");
     await guest.locator("#displayNameInput").fill("GuestCopyHost");
     await guest.getByTestId("btn-join-room").click();

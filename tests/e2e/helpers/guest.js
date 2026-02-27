@@ -1,6 +1,4 @@
 const { expect } = require("@playwright/test");
-const { readCode } = require("./code");
-
 async function waitForGuestConnection(guestPage, timeoutMs) {
     try {
         await expect(guestPage.locator("#tableView.active")).toBeVisible({ timeout: timeoutMs });
@@ -11,25 +9,26 @@ async function waitForGuestConnection(guestPage, timeoutMs) {
 }
 
 async function connectGuestToHost(hostPage, guestPage, guestName) {
+    const roomCodeText = await hostPage.locator("#hostRoomCode").textContent();
+    const roomCode = String(roomCodeText || "").trim();
     await guestPage.locator("#displayNameInput").fill(guestName);
     await guestPage.locator("#joinRoomBtn").click();
-    await expect(guestPage.locator("#copyGuestJoinCodeBtn")).toBeEnabled();
-    const joinCode = await readCode(guestPage.locator("#guestJoinCode"));
-
-    await hostPage.locator("#hostIncomingJoinCode").fill(joinCode);
-    await hostPage.locator("#acceptGuestBtn").click();
-    await expect(hostPage.locator("#copyHostResponseCodeBtn")).toBeEnabled();
-    const responseCode = await readCode(hostPage.locator("#hostResponseCode"));
-
-    await guestPage.locator("#guestResponseCodeInput").fill(responseCode);
-    await guestPage.locator("#connectGuestBtn").click();
+    await guestPage.locator("#guestRoomCodeInput").fill(roomCode);
+    await guestPage.locator("#connectGuestRoomBtn").click();
+    const pendingRow = hostPage.locator("#hostPendingRejoinList .row-between", { hasText: guestName }).first();
+    try {
+        await expect(pendingRow).toBeVisible({ timeout: 3_000 });
+        await pendingRow.getByRole("button", { name: "Approve" }).click();
+    } catch (_error) {
+        // Auto-approved joins may skip pending state.
+    }
     const connected = await waitForGuestConnection(guestPage, 8_000);
     const guestRow = hostPage.locator("#hostPlayerList .player-row", { hasText: guestName });
     if (connected) {
         await expect(guestRow).toContainText("Online", { timeout: 8_000 });
     } else {
         await expect(guestPage.locator("#guestConnectNotice")).toContainText(
-            /Waiting for data channel|Could not apply response code|Connection failed/
+            /approval|Could not connect to room|Disconnected/
         );
     }
 

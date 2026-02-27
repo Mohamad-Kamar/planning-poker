@@ -16,13 +16,17 @@ Legend:
 | Join room | idle -> guest | Covered | `join-flow.spec.js`, `journeys.navigation.spec.js` |
 | Require non-empty display name | idle | Covered | `journeys.navigation.spec.js` |
 | Open connection settings | idle | Covered | `settings.spec.js` |
+| Persist strategy + MQTT admission toggles | idle | Covered | `settings.spec.js` |
 
 ## Host Lobby
 
 | Action | Role | Status | Spec |
 | --- | --- | --- | --- |
-| Paste guest join code + accept | host | Covered | `join-flow.spec.js`, `game-lifecycle.spec.js` |
+| Share room code/link for quick join | host | Covered | `join-flow.spec.js`, `game-lifecycle.spec.js` |
+| Paste guest join code + accept (manual fallback) | host | Covered | `join-flow.spec.js`, `interaction-and-errors.spec.js` |
 | Clear join code textarea | host | Covered | `journeys.codes.spec.js` |
+| Copy room code / join link | host | Covered | `join-flow.spec.js` |
+| Set optional room PIN | host | Covered | `join-flow.spec.js` |
 | Copy response code plain | host | Covered | `journeys.codes.spec.js` |
 | Copy response code formatted | host | Covered | `journeys.codes.spec.js` |
 | Start game disabled until guest online | host | Covered | `game-lifecycle.spec.js` |
@@ -36,11 +40,14 @@ Legend:
 
 | Action | Role | Status | Spec |
 | --- | --- | --- | --- |
-| Generate join code on entry | guest | Covered | `join-flow.spec.js`, `journeys.navigation.spec.js` |
-| Regenerate join code | guest | Covered | `journeys.codes.spec.js` |
+| Enter room code and request quick join | guest | Covered | `join-flow.spec.js`, `game-lifecycle.spec.js` |
+| Join link pre-fills room code | guest | Covered | `join-flow.spec.js` |
+| PIN validation during quick join | guest | Covered | `join-flow.spec.js` |
+| Generate join code on entry (manual mode) | guest | Covered | `join-flow.spec.js`, `journeys.codes.spec.js` |
+| Regenerate join code (manual mode) | guest | Covered | `journeys.codes.spec.js` |
 | Copy join code plain | guest | Covered | `journeys.codes.spec.js` |
 | Copy join code formatted | guest | Covered | `journeys.codes.spec.js` |
-| Paste response and connect | guest | Covered | `game-lifecycle.spec.js` |
+| Paste response and connect (manual mode) | guest | Covered | `join-flow.spec.js` |
 | Reject malformed response code | guest | Covered | `interaction-and-errors.spec.js` |
 | Reject wrong-target response code | guest | Covered | `interaction-and-errors.spec.js` |
 | Enter submits response input | guest | Covered | `interaction-and-errors.spec.js` |
@@ -59,7 +66,7 @@ Legend:
 | Host-only controls hidden for guest | guest | Covered | `journeys.core.spec.js` |
 | Leave (guest) | guest | Covered | `game-lifecycle.spec.js` |
 | Back to lobby (host) | host | Covered | `persistence.spec.js`, `journeys.navigation.spec.js` |
-| Reconnect path from disconnected table | guest | Covered | `journeys.navigation.spec.js` |
+| Reconnect path from disconnected table | guest | Covered | `journeys.navigation.spec.js`, `resilience.rejoin.spec.js` |
 
 ## Persistence / Recovery
 

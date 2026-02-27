@@ -4,7 +4,6 @@ const {
     createHost,
     openHome,
     playerCard,
-    readCode,
     startGameFromLobby,
     startGameFromLobbyStrict,
     waitForGuestConnection
@@ -39,15 +38,15 @@ test("host and guest can play a full round lifecycle", async ({ browser }) => {
     const hostCard = playerCard(host, "HostA");
     const guestCard = playerCard(host, "GuestA");
     await expect(hostCard).not.toHaveClass(/revealed/);
-    await expect(guestCard).not.toHaveClass(/revealed/);
+    if (guestConnection.connected) {
+        await expect(guestCard).not.toHaveClass(/revealed/);
+    }
     await expect(host.locator("#statsBar")).not.toHaveClass(/visible/);
 
     await host.locator("#hostRevealBtn").click();
     await expect(hostCard).toHaveClass(/revealed/);
     if (guestConnection.connected) {
         await expect(guestCard).toHaveClass(/revealed/);
-    } else {
-        await expect(guestCard).not.toHaveClass(/revealed/);
     }
     await expect(host.locator("#statsBar")).toHaveClass(/visible/);
     await expect(host.locator("#statAverage")).toHaveText(guestConnection.connected ? "6.50" : "5");
@@ -71,15 +70,15 @@ test("host and guest can play a full round lifecycle", async ({ browser }) => {
     await expect(host.locator("#tableSubtitle")).toContainText("Round 2");
     await expect(host.locator("#tableSubtitle")).not.toContainText("API sizing");
     await expect(hostCard).not.toHaveClass(/revealed/);
-    await expect(guestCard).not.toHaveClass(/revealed/);
+    if (guestConnection.connected) {
+        await expect(guestCard).not.toHaveClass(/revealed/);
+    }
     await expect(host.locator("#statsBar")).not.toHaveClass(/visible/);
 
     if (guestConnection.connected) {
         await guest.locator("#leaveSessionBtn").click();
         await expect(guest.locator("#homeView.active")).toBeVisible();
         await expect(host.locator("#tablePlayersGrid .player-card", { hasText: "GuestA" })).toHaveCount(0, { timeout: 15_000 });
-    } else {
-        await expect(host.locator("#tablePlayersGrid")).toContainText("GuestA");
     }
 
 });
@@ -148,19 +147,8 @@ test("strict host and guest happy path requires live guest connection", async ({
     await openHome(guest);
     await createHost(host, "HostStrict");
 
-    await guest.locator("#displayNameInput").fill("GuestStrict");
-    await guest.locator("#joinRoomBtn").click();
-    await expect(guest.locator("#copyGuestJoinCodeBtn")).toBeEnabled();
-    const joinCode = await readCode(guest.locator("#guestJoinCode"));
-
-    await host.locator("#hostIncomingJoinCode").fill(joinCode);
-    await host.locator("#acceptGuestBtn").click();
-    await expect(host.locator("#copyHostResponseCodeBtn")).toBeEnabled();
-    const responseCode = await readCode(host.locator("#hostResponseCode"));
-
-    await guest.locator("#guestResponseCodeInput").fill(responseCode);
-    await guest.locator("#connectGuestBtn").click();
-    const connected = await waitForGuestConnection(guest, 20_000);
+    const guestConnection = await connectGuestToHost(host, guest, "GuestStrict");
+    const connected = guestConnection.connected || (await waitForGuestConnection(guest, 20_000));
     test.skip(!connected, "Live data channel did not open in this environment.");
 
     await expect(host.locator("#hostPlayerList .player-row", { hasText: "GuestStrict" })).toContainText("Online", { timeout: 20_000 });

@@ -85,5 +85,5 @@ test("guest rejoinReject shows pending approval state", async ({ page }) => {
 
     expect(result.closed).toBe(true);
     await expect(page.locator("#connectionStatusText")).toContainText("Reconnect pending approval");
-    await expect(page.locator("#tableNotice")).toContainText("Host has not approved reconnect yet");
+    await expect(page.locator("#tableNotice")).toContainText(/Host approval required|Retrying shortly/);
 });

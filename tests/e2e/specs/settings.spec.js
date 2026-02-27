@@ -21,3 +21,20 @@ test("connection settings dialog persists custom ICE servers", async ({ page }) 
     await expect(page.locator("#customIceServersInput")).toHaveValue(/stun:stun\.example\.com:3478/);
     await page.locator("#iceSettingsCancelBtn").click();
 });
+
+test("connection settings persist strategy and MQTT admission toggles", async ({ page }) => {
+    await openHome(page);
+    await page.locator("#iceSettingsBtn").click();
+    await expect(page.locator("#iceSettingsDialog")).toBeVisible();
+    await page.locator("#connectionStrategySelect").selectOption("manualWebRtc");
+    await page.locator("#hostRequireApprovalFirstJoinCheckbox").uncheck();
+    await page.locator("#hostAutoApproveKnownRejoinCheckbox").uncheck();
+    await page.locator("#iceSettingsSaveBtn").click();
+    await expect(page.locator("#homeNotice")).toContainText("Connection settings saved");
+
+    await page.locator("#iceSettingsBtn").click();
+    await expect(page.locator("#connectionStrategySelect")).toHaveValue("manualWebRtc");
+    await expect(page.locator("#hostRequireApprovalFirstJoinCheckbox")).not.toBeChecked();
+    await expect(page.locator("#hostAutoApproveKnownRejoinCheckbox")).not.toBeChecked();
+    await page.locator("#iceSettingsCancelBtn").click();
+});
