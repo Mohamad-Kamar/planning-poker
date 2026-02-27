@@ -15,6 +15,7 @@ const HOST_RECOVERY_RETRY_BASE_MS = 1000;
 const HOST_RECOVERY_RETRY_MAX_MS = 8000;
 let hostRecoveryRetryTimer = null;
 let hostRecoveryRetryAttempts = 0;
+let lastClosedRecoveryRelay = null;
 
 export function startHostRecoveryRelayListener() {
     if (state.role !== "host" || !state.session) return;
@@ -27,12 +28,15 @@ export function startHostRecoveryRelayListener() {
         onOpen: (channel) => {
             clearHostRecoveryRetryTimer();
             hostRecoveryRetryAttempts = 0;
+            const previousRecoveryRelay = lastClosedRecoveryRelay;
             state.hostRecoveryRelay = channel;
-            rebindRelayPeersToRecoveryChannel(channel);
+            rebindRelayPeersToRecoveryChannel(channel, previousRecoveryRelay);
+            lastClosedRecoveryRelay = null;
             log.info("host", "Host recovery relay ready", { roomId });
         },
         onClose: () => {
             if (state.hostRecoveryRelay !== relayChannel) return;
+            lastClosedRecoveryRelay = relayChannel;
             state.hostRecoveryRelay = null;
             log.warn("host", "Host recovery relay closed", { roomId });
             scheduleHostRecoveryRelayRetry("channel-closed", true);
@@ -42,6 +46,7 @@ export function startHostRecoveryRelayListener() {
         },
         onFailure: (errorInfo) => {
             if (state.hostRecoveryRelay !== relayChannel) return;
+            lastClosedRecoveryRelay = relayChannel;
             state.hostRecoveryRelay = null;
             const reason = errorInfo && errorInfo.reason ? errorInfo.reason : "unknown";
             log.warn("host", "Host recovery relay failed", { roomId, reason });
@@ -502,12 +507,13 @@ function scheduleHostRecoveryRelayRetry(reason, immediate = false) {
     });
 }
 
-function rebindRelayPeersToRecoveryChannel(relayChannel) {
+function rebindRelayPeersToRecoveryChannel(relayChannel, previousRecoveryRelay) {
     if (!relayChannel || relayChannel.readyState !== "open") return;
+    if (!previousRecoveryRelay) return;
     let rebound = 0;
     for (const peer of state.hostPeers.values()) {
         if (!peer || !peer.dc) continue;
-        if (peer.dc.transportType !== "mqtt-relay") continue;
+        if (peer.dc !== previousRecoveryRelay) continue;
         peer.dc = relayChannel;
         rebound += 1;
     }
