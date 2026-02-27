@@ -325,6 +325,13 @@ export async function connectGuestByRoomCode(roomCode, pin = "") {
     state.guestJoinPin = String(pin || "").trim();
     state.guestAutoRejoinEnabled = true;
     resetGuestRejoinState();
+    if (state.guestChannel && typeof state.guestChannel.close === "function") {
+        try {
+            state.guestChannel.close();
+        } catch (_error) {
+            // Ignore close errors while restarting quick-join.
+        }
+    }
     updateConnectionStatus(false, "Connecting to room...");
     showNotice(els.guestConnectNotice, "Requesting host approval...", "info");
     await attemptGuestDirectRelayJoin("quick-join");
@@ -478,9 +485,8 @@ async function attemptGuestAutoRejoin(reason) {
             }, REJOIN_ACK_TIMEOUT_MS);
         },
         onClose: () => {
-            if (state.guestChannel === relayChannel) {
-                state.guestChannel = null;
-            }
+            if (state.guestChannel !== relayChannel) return;
+            state.guestChannel = null;
             updateConnectionStatus(false, "Reconnecting to host...");
             if (canAttemptGuestAutoRejoin()) {
                 scheduleGuestAutoRejoin("relay-close");
@@ -491,6 +497,7 @@ async function attemptGuestAutoRejoin(reason) {
             onHostChannelMessage(payload, relayChannel);
         },
         onFailure: (errorInfo) => {
+            if (state.guestChannel !== relayChannel) return;
             const reasonText = errorInfo && errorInfo.reason ? errorInfo.reason : "unknown";
             showNotice(
                 els.tableNotice,
@@ -534,18 +541,13 @@ async function attemptGuestDirectRelayJoin(reason) {
             setTimeout(() => {
                 if (state.guestChannel !== channel) return;
                 if (!guestAwaitingRejoinAck) return;
-                try {
-                    channel.close();
-                } catch (_error) {
-                    // Ignore close errors.
-                }
                 showNotice(els.guestConnectNotice, "Waiting for host approval. You can retry.", "warn");
+                updateConnectionStatus(false, "Waiting for host approval");
             }, REJOIN_ACK_TIMEOUT_MS);
         },
         onClose: () => {
-            if (state.guestChannel === relayChannel) {
-                state.guestChannel = null;
-            }
+            if (state.guestChannel !== relayChannel) return;
+            state.guestChannel = null;
             updateConnectionStatus(false, "Disconnected");
         },
         onMessage: (payload) => {
@@ -553,6 +555,7 @@ async function attemptGuestDirectRelayJoin(reason) {
             onHostChannelMessage(payload, relayChannel);
         },
         onFailure: (errorInfo) => {
+            if (state.guestChannel !== relayChannel) return;
             const reasonText = errorInfo && errorInfo.reason ? errorInfo.reason : "unknown";
             showNotice(els.guestConnectNotice, "Could not connect to room (" + reasonText + ").", "error");
             log.warn("guest", "Quick join relay failed", { reason, reasonText, roomId });
@@ -589,9 +592,13 @@ export function handleGuestInboundMessage(rawData, channel) {
             ? message.reason.trim()
             : "Host approval required.";
         updateConnectionStatus(false, "Reconnect pending approval");
+        const retryAllowed = canAttemptGuestAutoRejoin();
+        const retryHint = retryAllowed
+            ? " Retrying shortly..."
+            : " Click Join Room to retry.";
         showNotice(
             state.currentView === "table" ? els.tableNotice : els.guestConnectNotice,
-            rejectReason + " Retrying shortly...",
+            rejectReason + retryHint,
             "warn"
         );
         if (state.guestChannel === channel) {
@@ -601,7 +608,7 @@ export function handleGuestInboundMessage(rawData, channel) {
                 // Ignore close errors.
             }
         }
-        if (canAttemptGuestAutoRejoin()) {
+        if (retryAllowed) {
             scheduleGuestAutoRejoin("rejected");
         }
         saveSessionSnapshot();
