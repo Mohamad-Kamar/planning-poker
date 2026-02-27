@@ -7,7 +7,6 @@ import { renderHostLobby, renderTable } from "./render.js";
 import { saveSessionSnapshot } from "./persistence.js";
 import { ROUND_TITLE_MAX_LENGTH, sanitizeHostName } from "./host-shared.js";
 import { sendJson } from "./messaging.js";
-import { sanitizeText } from "./sanitize.js";
 import { EMPTY_HOST_RESPONSE_CODE_DISPLAY } from "./signal-display-presets.js";
 
 export function startHostSession(displayName) {
@@ -129,5 +128,6 @@ export function broadcastMessageToGuests(message) {
 }
 
 function sanitizeRoundTitle(title) {
-    return sanitizeText(title, ROUND_TITLE_MAX_LENGTH);
+    // Keep one-space normalization but do not trim so host can type trailing spaces naturally.
+    return String(title || "").replace(/\s+/g, " ").slice(0, ROUND_TITLE_MAX_LENGTH);
 }

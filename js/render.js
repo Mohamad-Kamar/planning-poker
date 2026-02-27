@@ -80,7 +80,11 @@ export function renderTable() {
     if (els.hostRoundTitleInput) {
         if (isHost) {
             els.hostRoundTitleInput.style.display = "block";
-            els.hostRoundTitleInput.value = state.session ? (state.session.roundTitle || "") : "";
+            const nextRoundTitleValue = state.session ? (state.session.roundTitle || "") : "";
+            const isEditingRoundTitle = document.activeElement === els.hostRoundTitleInput;
+            if (!isEditingRoundTitle && els.hostRoundTitleInput.value !== nextRoundTitleValue) {
+                els.hostRoundTitleInput.value = nextRoundTitleValue;
+            }
         } else {
             els.hostRoundTitleInput.style.display = "none";
             els.hostRoundTitleInput.value = "";

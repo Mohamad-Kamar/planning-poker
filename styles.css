@@ -410,6 +410,24 @@ textarea.code-box {
     gap: 16px;
 }
 
+.table-round-header {
+    border: 1px solid var(--surface-accent-strong);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    background: linear-gradient(180deg, var(--surface-accent) 0%, var(--white) 100%);
+}
+
+.table-round-header .panel-heading {
+    margin-bottom: 6px;
+}
+
+.table-round-subtitle {
+    color: var(--text-accent-strong);
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 0;
+}
+
 .stats-bar {
     display: none;
     grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -610,7 +628,10 @@ textarea.code-box {
 
 .host-round-title-input {
     display: none;
-    margin-top: 8px;
+    margin-top: 10px;
+    border-color: var(--surface-accent-strong);
+    background: var(--white);
+    font-size: 15px;
 }
 
 @media (max-width: 900px) {
