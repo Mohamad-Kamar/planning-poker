@@ -28,9 +28,11 @@ export function startHostRecoveryRelayListener() {
             clearHostRecoveryRetryTimer();
             hostRecoveryRetryAttempts = 0;
             state.hostRecoveryRelay = channel;
+            rebindRelayPeersToRecoveryChannel(channel);
             log.info("host", "Host recovery relay ready", { roomId });
         },
         onClose: () => {
+            if (state.hostRecoveryRelay !== relayChannel) return;
             state.hostRecoveryRelay = null;
             log.warn("host", "Host recovery relay closed", { roomId });
             scheduleHostRecoveryRelayRetry("channel-closed", true);
@@ -39,9 +41,8 @@ export function startHostRecoveryRelayListener() {
             onHostRecoveryRelayMessage(payload, fromGuestId, relayChannel);
         },
         onFailure: (errorInfo) => {
-            if (state.hostRecoveryRelay === relayChannel) {
-                state.hostRecoveryRelay = null;
-            }
+            if (state.hostRecoveryRelay !== relayChannel) return;
+            state.hostRecoveryRelay = null;
             const reason = errorInfo && errorInfo.reason ? errorInfo.reason : "unknown";
             log.warn("host", "Host recovery relay failed", { roomId, reason });
             scheduleHostRecoveryRelayRetry("failure-" + reason, true);
@@ -499,4 +500,21 @@ function scheduleHostRecoveryRelayRetry(reason, immediate = false) {
         attempt: hostRecoveryRetryAttempts,
         delayMs
     });
+}
+
+function rebindRelayPeersToRecoveryChannel(relayChannel) {
+    if (!relayChannel || relayChannel.readyState !== "open") return;
+    let rebound = 0;
+    for (const peer of state.hostPeers.values()) {
+        if (!peer || !peer.dc) continue;
+        if (peer.dc.transportType !== "mqtt-relay") continue;
+        peer.dc = relayChannel;
+        rebound += 1;
+    }
+    if (rebound) {
+        broadcastState();
+        renderHostLobby();
+        renderTable();
+        log.info("host", "Rebound relay peers to recovery channel", { peers: rebound });
+    }
 }

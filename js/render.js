@@ -162,19 +162,27 @@ export function renderTablePlayers(players) {
         const faceVote = hasVote ? "<div class=\"vote-check\">Voted</div>" : "<div class=\"vote-placeholder\">-</div>";
         const backVote = hasVote ? escapeHtml(String(player.vote)) : "<span class=\"vote-placeholder\">-</span>";
         const dotClass = player.connected ? "online" : "offline";
+        const connectionLabel = player.connected ? "Online" : "Offline";
+        const concealedLabel = hasVote ? "Voted" : "Waiting";
+        const revealedLabel = player.vote != null ? "Revealed vote" : "No vote";
         return `<div class="player-card ${showBack ? "revealed" : ""}">
             <div class="player-card-face">
-                <div class="row-between">
+                <div class="player-card-header">
                     <div class="player-name">${escapeHtml(player.name)}</div>
                     <span class="status-dot ${dotClass}"></span>
                 </div>
-                <div>${faceVote}</div>
-                <div class="vote-label">${player.connected ? "Online" : "Offline"}</div>
+                <div class="player-card-center">${faceVote}</div>
+                <div class="vote-label">${concealedLabel} • ${connectionLabel}</div>
             </div>
             <div class="player-card-face player-card-back">
-                <div class="player-name">${escapeHtml(player.name)}</div>
-                <div class="vote-value">${backVote}</div>
-                <div class="vote-label">Revealed</div>
+                <div class="player-card-header">
+                    <div class="player-name">${escapeHtml(player.name)}</div>
+                    <span class="status-dot ${dotClass}"></span>
+                </div>
+                <div class="player-card-center">
+                    <div class="vote-value">${backVote}</div>
+                </div>
+                <div class="vote-label">${revealedLabel} • ${connectionLabel}</div>
             </div>
         </div>`;
     }).join("");
