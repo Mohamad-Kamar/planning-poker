@@ -293,7 +293,7 @@ export function setupGuestPeerHandlers(pc, dc) {
 
 export function onHostChannelOpen(channel) {
     if (state.guestChannel !== channel) return;
-    resetGuestRejoinState();
+    settleGuestRejoinState();
     startGuestPresenceLoop();
     updateConnectionStatus(true, "Connected to host");
     setGuestStep(3);
@@ -415,13 +415,17 @@ function clearGuestRejoinTimer() {
 }
 
 function resetGuestRejoinState() {
+    settleGuestRejoinState();
+    guestAutoRejoinAttemptId += 1;
+    guestQuickJoinAttemptId += 1;
+}
+
+function settleGuestRejoinState() {
     clearGuestRejoinTimer();
     clearGuestJoinRetryTimer();
     guestRejoinAttempts = 0;
     guestJoinRetryAttempts = 0;
     guestAwaitingRejoinAck = false;
-    guestAutoRejoinAttemptId += 1;
-    guestQuickJoinAttemptId += 1;
 }
 
 function stopGuestPresenceLoop() {
