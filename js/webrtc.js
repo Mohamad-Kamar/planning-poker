@@ -240,6 +240,7 @@ export function shutdownHost(noticeMessage) {
     state.hostResponseCodeRaw = "";
     state.roomId = null;
     state.hostPendingRejoinRequests = [];
+    state.hostApprovedGuestIds = [];
     state.hostRoomPin = "";
     setSignalCodeDisplay(
         els.hostResponseCode,

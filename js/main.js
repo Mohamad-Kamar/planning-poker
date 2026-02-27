@@ -491,6 +491,10 @@ function restoreHostSnapshot(snapshot) {
     state.hostPeers.clear();
     state.hostResponseCodeRaw = "";
     state.hostRoomPin = snapshot.hostRoomPin || "";
+    state.hostApprovedGuestIds = Array.isArray(snapshot.hostApprovedGuestIds)
+        ? snapshot.hostApprovedGuestIds.slice()
+        : [];
+    state.hostPendingRejoinRequests = [];
     state.guestPeer = null;
     state.guestChannel = null;
     state.guestRemoteState = null;

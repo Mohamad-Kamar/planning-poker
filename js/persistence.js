@@ -87,6 +87,31 @@ function normalizeHostSession(sessionRaw, localId, displayName) {
     };
 }
 
+function normalizeApprovedGuestIds(idsRaw, localId, fallbackPlayers = null) {
+    const approvedIds = [];
+    const seen = new Set();
+    const appendId = (value) => {
+        const id = normalizeId(value);
+        if (!id || id === localId || seen.has(id)) return;
+        seen.add(id);
+        approvedIds.push(id);
+    };
+
+    if (Array.isArray(idsRaw)) {
+        for (const entryId of idsRaw) {
+            appendId(entryId);
+        }
+    }
+
+    if (!approvedIds.length && fallbackPlayers && typeof fallbackPlayers === "object") {
+        for (const entryId of Object.keys(fallbackPlayers)) {
+            appendId(entryId);
+        }
+    }
+
+    return approvedIds;
+}
+
 function normalizeGuestPlayers(playersRaw) {
     if (!Array.isArray(playersRaw)) return [];
     const normalized = [];
@@ -136,6 +161,11 @@ function buildSnapshotFromState() {
     if (role === "host") {
         const session = normalizeHostSession(state.session, localId, displayName);
         if (!session) return null;
+        const hostApprovedGuestIds = normalizeApprovedGuestIds(
+            state.hostApprovedGuestIds,
+            localId,
+            session.players
+        );
         return {
             v: SNAPSHOT_VERSION,
             savedAt: Date.now(),
@@ -146,6 +176,7 @@ function buildSnapshotFromState() {
             hostRequireApprovalFirstJoin: !!state.hostRequireApprovalFirstJoin,
             hostAutoApproveKnownRejoin: !!state.hostAutoApproveKnownRejoin,
             hostRoomPin: sanitizeText(state.hostRoomPin || "", 20),
+            hostApprovedGuestIds,
             currentView: normalizeRoleView("host", state.currentView),
             roomId: normalizeId(state.roomId || localId) || localId,
             selectedVote,
@@ -193,6 +224,11 @@ function normalizeLoadedSnapshot(snapshotRaw) {
     if (role === "host") {
         const session = normalizeHostSession(snapshotRaw.session, localId, displayName);
         if (!session) return null;
+        const hostApprovedGuestIds = normalizeApprovedGuestIds(
+            snapshotRaw.hostApprovedGuestIds,
+            localId,
+            session.players
+        );
         return {
             role: "host",
             localId,
@@ -201,6 +237,7 @@ function normalizeLoadedSnapshot(snapshotRaw) {
             hostRequireApprovalFirstJoin,
             hostAutoApproveKnownRejoin,
             hostRoomPin: sanitizeText(snapshotRaw.hostRoomPin || "", 20),
+            hostApprovedGuestIds,
             currentView,
             roomId: roomId || localId,
             selectedVote,

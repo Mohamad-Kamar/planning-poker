@@ -19,6 +19,7 @@ export function startHostSession(displayName) {
     state.roomId = state.localId;
     state.hostRoomPin = "";
     state.hostPendingRejoinRequests = [];
+    state.hostApprovedGuestIds = [];
     setSignalCodeDisplay(
         els.hostResponseCode,
         els.hostResponseCodeMeta,

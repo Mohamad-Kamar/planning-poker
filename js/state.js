@@ -19,6 +19,7 @@ export const state = {
     roomId: null,
     hostRecoveryRelay: null,
     hostPendingRejoinRequests: [],
+    hostApprovedGuestIds: [],
     guestAutoRejoinEnabled: false,
     guestJoinPin: "",
     connectionStrategy: "mqttQuickJoin",

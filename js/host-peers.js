@@ -90,6 +90,7 @@ export function onKickGuest(guestId) {
     const player = state.session.players[normalizedGuestId];
     const peer = state.hostPeers.get(normalizedGuestId);
     if (!player && !peer) return;
+    forgetApprovedGuestId(normalizedGuestId);
 
     const guestName = sanitizeHostName((player && player.name) || (peer && peer.name) || "Guest");
     let delayedDisconnect = false;
@@ -402,6 +403,7 @@ function markPeerConnected(guestId, preferredName) {
     const peer = state.hostPeers.get(guestId);
     if (!peer) return;
     peer.connected = true;
+    rememberApprovedGuestId(guestId);
     const name = sanitizeHostName(preferredName || peer.name || getKnownGuestName(guestId));
     peer.name = name;
     upsertHostPlayer(guestId, name, true, sanitizeHostName);
@@ -423,6 +425,33 @@ function getKnownGuestName(guestId) {
 }
 
 function isKnownGuestId(guestId) {
-    if (!state.session || !state.session.players) return false;
-    return !!state.session.players[guestId] && guestId !== state.localId;
+    if (!state.session || !guestId || guestId === state.localId) return false;
+    if (hasApprovedGuestId(guestId)) return true;
+    return !!state.session.players && !!state.session.players[guestId];
+}
+
+function ensureApprovedGuestIdList() {
+    if (!Array.isArray(state.hostApprovedGuestIds)) {
+        state.hostApprovedGuestIds = [];
+    }
+    return state.hostApprovedGuestIds;
+}
+
+function hasApprovedGuestId(guestId) {
+    return ensureApprovedGuestIdList().includes(guestId);
+}
+
+function rememberApprovedGuestId(guestId) {
+    if (!guestId || guestId === state.localId) return;
+    const approved = ensureApprovedGuestIdList();
+    if (!approved.includes(guestId)) {
+        approved.push(guestId);
+    }
+}
+
+function forgetApprovedGuestId(guestId) {
+    if (!guestId) return;
+    const approved = ensureApprovedGuestIdList();
+    if (!approved.length) return;
+    state.hostApprovedGuestIds = approved.filter((id) => id !== guestId);
 }

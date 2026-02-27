@@ -85,3 +85,56 @@ test("invalid snapshot localId is cleared on boot", async ({ page }) => {
     const persisted = await page.evaluate(() => window.sessionStorage.getItem("planningPoker.session"));
     expect(persisted).toBeNull();
 });
+
+test("host snapshot restores approved guest IDs for rejoin auto-approval", async ({ page }) => {
+    await openHome(page);
+    await page.evaluate((snapshot) => {
+        window.sessionStorage.setItem("planningPoker.session", JSON.stringify(snapshot));
+    }, hostSnapshot({
+        hostApprovedGuestIds: ["guest-known-1", "guest-known-2", "guest-known-1", "hostcontract01", ""]
+    }));
+
+    await page.reload();
+    const approvedIds = await page.evaluate(async () => {
+        const { state } = await import("/js/state.js");
+        return state.hostApprovedGuestIds;
+    });
+    expect(approvedIds).toEqual(["guest-known-1", "guest-known-2"]);
+});
+
+test("legacy host snapshot derives approved guests from players", async ({ page }) => {
+    await openHome(page);
+    await page.evaluate((snapshot) => {
+        window.sessionStorage.setItem("planningPoker.session", JSON.stringify(snapshot));
+    }, hostSnapshot({
+        session: {
+            round: 1,
+            roundTitle: "",
+            started: true,
+            revealed: false,
+            players: {
+                hostcontract01: {
+                    id: "hostcontract01",
+                    name: "Host Contract",
+                    connected: true,
+                    vote: null,
+                    isHost: true
+                },
+                guestlegacy01: {
+                    id: "guestlegacy01",
+                    name: "Legacy Guest",
+                    connected: false,
+                    vote: null,
+                    isHost: false
+                }
+            }
+        }
+    }));
+
+    await page.reload();
+    const approvedIds = await page.evaluate(async () => {
+        const { state } = await import("/js/state.js");
+        return state.hostApprovedGuestIds;
+    });
+    expect(approvedIds).toEqual(["guestlegacy01"]);
+});
