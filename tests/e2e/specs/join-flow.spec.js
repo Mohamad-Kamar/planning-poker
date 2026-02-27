@@ -117,6 +117,39 @@ test("mqtt quick join connects guest with room code and host approval", async ({
     await expect(guest.locator("#tableView.active")).toBeVisible({ timeout: 12_000 });
 });
 
+test("mqtt quick join delayed host approval still auto-enters table", async ({ browser }) => {
+    const context = await browser.newContext();
+    const host = await context.newPage();
+    const guest = await context.newPage();
+
+    await openHome(host);
+    await openHome(guest);
+    await setConnectionPreferences(host, {
+        mode: "mqttQuickJoin",
+        hostRequireApprovalFirstJoin: true,
+        hostAutoApproveKnownRejoin: true
+    });
+    await setConnectionMode(guest, "mqttQuickJoin");
+    await createHost(host, "HostDelayedApprove");
+    const roomCode = String(await host.locator("#hostRoomCode").textContent() || "").trim();
+
+    await guest.locator("#displayNameInput").fill("GuestDelayedApprove");
+    await guest.locator("#joinRoomBtn").click();
+    await guest.locator("#guestRoomCodeInput").fill(roomCode);
+    await guest.locator("#connectGuestRoomBtn").click();
+
+    const pendingRow = host.locator("#hostPendingRejoinList .row-between", { hasText: "GuestDelayedApprove" }).first();
+    await expect(pendingRow).toBeVisible({ timeout: 8_000 });
+
+    // Wait past guest waiting threshold to verify approval can arrive late.
+    await host.waitForTimeout(6_000);
+    await expect(guest.locator("#guestConnectView.active")).toBeVisible();
+    await expect(guest.locator("#guestConnectNotice")).toContainText(/Waiting for host approval|Requesting host approval/);
+
+    await pendingRow.getByRole("button", { name: "Approve" }).click();
+    await expect(guest.locator("#tableView.active")).toBeVisible({ timeout: 12_000 });
+});
+
 test("mqtt quick join enforces room pin", async ({ browser }) => {
     const context = await browser.newContext();
     const host = await context.newPage();
