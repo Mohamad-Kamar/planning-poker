@@ -64,15 +64,7 @@ function init() {
     configureHost({ sanitizeName });
     setTableViewHandler(renderTable);
     setVoteSelectHandler((vote) => {
-        setLocalVote(vote, {
-            els,
-            renderVotePalette,
-            showNotice,
-            sendJson: guestSendJson,
-            broadcastState,
-            renderTable,
-            renderHostLobby
-        });
+        setLocalVote(vote, createVoteDeps());
     });
 
     renderVotePalette();
@@ -223,21 +215,25 @@ function wireGuestEvents() {
 function wireTableEvents() {
     els.leaveSessionBtn.addEventListener("click", onLeaveOrBack);
     els.clearVoteBtn.addEventListener("click", () => {
-        setLocalVote(null, {
-            els,
-            renderVotePalette,
-            showNotice,
-            sendJson: guestSendJson,
-            broadcastState,
-            renderTable,
-            renderHostLobby
-        });
+        setLocalVote(null, createVoteDeps());
     });
     els.hostRevealBtn.addEventListener("click", onHostRevealVotes);
     els.hostResetBtn.addEventListener("click", onHostNewRound);
     els.hostRoundTitleInput.addEventListener("input", () => {
         onHostRoundTitleChange(els.hostRoundTitleInput.value);
     });
+}
+
+function createVoteDeps() {
+    return {
+        els,
+        renderVotePalette,
+        showNotice,
+        sendJson: guestSendJson,
+        broadcastState,
+        renderTable,
+        renderHostLobby
+    };
 }
 
 function wireProfileAndLifecycleEvents() {
@@ -494,7 +490,9 @@ function restoreHostSnapshot(snapshot) {
     state.hostApprovedGuestIds = Array.isArray(snapshot.hostApprovedGuestIds)
         ? snapshot.hostApprovedGuestIds.slice()
         : [];
-    state.hostPendingRejoinRequests = [];
+    state.hostPendingRejoinRequests = Array.isArray(snapshot.hostPendingRejoinRequests)
+        ? snapshot.hostPendingRejoinRequests.map((entry) => ({ ...entry }))
+        : [];
     state.guestPeer = null;
     state.guestChannel = null;
     state.guestRemoteState = null;
@@ -563,7 +561,8 @@ function restoreGuestSnapshot(snapshot) {
     );
     updateConnectionStatus(false, "Disconnected");
 
-    if (snapshot.currentView === "table" && snapshot.guestRemoteState) {
+    const shouldRestoreGuestTable = snapshot.currentView === "table" && (snapshot.guestRemoteState || snapshot.roomId);
+    if (shouldRestoreGuestTable) {
         showView("table");
         renderTable();
         showNotice(els.tableNotice, "Session restored. Attempting to reconnect to host...", "info");

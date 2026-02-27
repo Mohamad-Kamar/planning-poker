@@ -60,9 +60,9 @@ test("round title and vote clear updates propagate correctly", async ({ browser 
     await expect(host.locator("#statConsensus")).toHaveText("Yes");
 
     await host.getByTestId("btn-clear-vote").click();
-    await expect(host.locator("#statAverage")).toHaveText("-");
-    await expect(host.locator("#statMedian")).toHaveText("-");
-    await expect(host.locator("#statMin")).toHaveText("-");
-    await expect(host.locator("#statMax")).toHaveText("-");
+    await expect(host.locator("#statAverage")).toHaveText("--");
+    await expect(host.locator("#statMedian")).toHaveText("--");
+    await expect(host.locator("#statMin")).toHaveText("--");
+    await expect(host.locator("#statMax")).toHaveText("--");
     await expect(host.locator("#statConsensus")).toHaveText("No");
 });

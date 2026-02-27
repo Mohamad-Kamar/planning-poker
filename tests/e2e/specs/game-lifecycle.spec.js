@@ -41,14 +41,17 @@ test("host and guest can play a full round lifecycle", async ({ browser }) => {
     if (guestConnection.connected) {
         await expect(guestCard).not.toHaveClass(/revealed/);
     }
-    await expect(host.locator("#statsBar")).not.toHaveClass(/visible/);
+    await expect(host.locator("#statAverage")).toHaveText("--");
+    await expect(host.locator("#statMedian")).toHaveText("--");
+    await expect(host.locator("#statMin")).toHaveText("--");
+    await expect(host.locator("#statMax")).toHaveText("--");
+    await expect(host.locator("#statConsensus")).toHaveText("--");
 
     await host.locator("#hostRevealBtn").click();
     await expect(hostCard).toHaveClass(/revealed/);
     if (guestConnection.connected) {
         await expect(guestCard).toHaveClass(/revealed/);
     }
-    await expect(host.locator("#statsBar")).toHaveClass(/visible/);
     await expect(host.locator("#statAverage")).toHaveText(guestConnection.connected ? "6.50" : "5");
     await expect(host.locator("#statMedian")).toHaveText(guestConnection.connected ? "6.50" : "5");
     await expect(host.locator("#statMin")).toHaveText("5");
@@ -66,6 +69,17 @@ test("host and guest can play a full round lifecycle", async ({ browser }) => {
         await expect(guest.locator("#statAverage")).toHaveText("10.50");
     }
 
+    await host.locator("#hostRevealBtn").click();
+    await expect(hostCard).not.toHaveClass(/revealed/);
+    if (guestConnection.connected) {
+        await expect(guestCard).not.toHaveClass(/revealed/);
+    }
+    await expect(host.locator("#statAverage")).toHaveText("--");
+    await expect(host.locator("#statMedian")).toHaveText("--");
+    await expect(host.locator("#statMin")).toHaveText("--");
+    await expect(host.locator("#statMax")).toHaveText("--");
+    await expect(host.locator("#statConsensus")).toHaveText("--");
+
     await host.locator("#hostResetBtn").click();
     await expect(host.locator("#tableSubtitle")).toContainText("Round 2");
     await expect(host.locator("#tableSubtitle")).not.toContainText("API sizing");
@@ -73,7 +87,11 @@ test("host and guest can play a full round lifecycle", async ({ browser }) => {
     if (guestConnection.connected) {
         await expect(guestCard).not.toHaveClass(/revealed/);
     }
-    await expect(host.locator("#statsBar")).not.toHaveClass(/visible/);
+    await expect(host.locator("#statAverage")).toHaveText("--");
+    await expect(host.locator("#statMedian")).toHaveText("--");
+    await expect(host.locator("#statMin")).toHaveText("--");
+    await expect(host.locator("#statMax")).toHaveText("--");
+    await expect(host.locator("#statConsensus")).toHaveText("--");
 
     if (guestConnection.connected) {
         await guest.locator("#leaveSessionBtn").click();

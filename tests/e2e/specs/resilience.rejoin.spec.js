@@ -154,3 +154,261 @@ test("host auto-approves known guest rejoin without queueing pending request", a
     expect(result.pendingIds).toEqual([]);
     expect(result.peerConnected).toBe(true);
 });
+
+test("host recovery relay listener reconnects after relay close", async ({ page }) => {
+    await openHome(page);
+
+    const result = await page.evaluate(async () => {
+        const originalWebSocket = window.WebSocket;
+        window.__PP_TEST_HOST_RECOVERY_RETRY_MS = 10;
+        const OPEN = 1;
+        let websocketCreates = 0;
+        let forcedCloseDone = false;
+
+        class FakeWebSocket {
+            static OPEN = OPEN;
+
+            constructor() {
+                websocketCreates += 1;
+                this.binaryType = "arraybuffer";
+                this.readyState = 0;
+                this.onopen = null;
+                this.onmessage = null;
+                this.onclose = null;
+                setTimeout(() => {
+                    this.readyState = OPEN;
+                    if (typeof this.onopen === "function") this.onopen();
+                }, 0);
+            }
+
+            send(data) {
+                const bytes = new Uint8Array(data);
+                const packetType = bytes[0] >> 4;
+                if (packetType === 1 && typeof this.onmessage === "function") {
+                    this.onmessage({ data: new Uint8Array([0x20, 0x02, 0x00, 0x00]).buffer });
+                    return;
+                }
+                if (packetType === 8 && typeof this.onmessage === "function") {
+                    const packetIdMsb = bytes[2] || 0x00;
+                    const packetIdLsb = bytes[3] || 0x01;
+                    this.onmessage({ data: new Uint8Array([0x90, 0x03, packetIdMsb, packetIdLsb, 0x00]).buffer });
+                    if (!forcedCloseDone) {
+                        forcedCloseDone = true;
+                        setTimeout(() => this.close(), 20);
+                    }
+                }
+            }
+
+            close() {
+                this.readyState = 3;
+                if (typeof this.onclose === "function") this.onclose();
+            }
+        }
+
+        window.WebSocket = FakeWebSocket;
+        try {
+            const { state } = await import("/js/state.js");
+            const { startHostRecoveryRelayListener } = await import("/js/host-peers.js");
+
+            state.role = "host";
+            state.localId = "host-reconnect-listener";
+            state.roomId = "room-reconnect-listener";
+            state.session = {
+                round: 1,
+                roundTitle: "",
+                started: true,
+                revealed: false,
+                players: {
+                    "host-reconnect-listener": {
+                        id: "host-reconnect-listener",
+                        name: "Host",
+                        connected: true,
+                        vote: null,
+                        isHost: true
+                    }
+                }
+            };
+            state.hostRecoveryRelay = null;
+            startHostRecoveryRelayListener();
+
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            if (state.hostRecoveryRelay && typeof state.hostRecoveryRelay.close === "function") {
+                state.hostRecoveryRelay.close();
+            }
+            await new Promise((resolve) => setTimeout(resolve, 220));
+            return { websocketCreates };
+        } finally {
+            delete window.__PP_TEST_HOST_RECOVERY_RETRY_MS;
+            window.WebSocket = originalWebSocket;
+        }
+    });
+
+    expect(result.websocketCreates).toBeGreaterThan(1);
+});
+
+test("guest auto-rejoin close-path exhaustion shows terminal reconnect notice", async ({ page }) => {
+    await openHome(page);
+
+    const result = await page.evaluate(async () => {
+        const originalWebSocket = window.WebSocket;
+        const originalSetTimeout = window.setTimeout;
+        window.__PP_TEST_REJOIN_MAX_RETRIES = 2;
+        const OPEN = 1;
+        window.setTimeout = (handler, timeout, ...args) => {
+            const clamped = Math.min(Number(timeout || 0), 10);
+            return originalSetTimeout(handler, clamped, ...args);
+        };
+
+        class FakeWebSocket {
+            static OPEN = OPEN;
+
+            constructor() {
+                this.binaryType = "arraybuffer";
+                this.readyState = 0;
+                this.onopen = null;
+                this.onmessage = null;
+                this.onclose = null;
+                setTimeout(() => {
+                    this.readyState = OPEN;
+                    if (typeof this.onopen === "function") this.onopen();
+                }, 0);
+            }
+
+            send(data) {
+                const bytes = new Uint8Array(data);
+                const packetType = bytes[0] >> 4;
+                if (packetType === 1 && typeof this.onmessage === "function") {
+                    this.onmessage({ data: new Uint8Array([0x20, 0x02, 0x00, 0x00]).buffer });
+                    return;
+                }
+                if (packetType === 8 && typeof this.onmessage === "function") {
+                    const packetIdMsb = bytes[2] || 0x00;
+                    const packetIdLsb = bytes[3] || 0x01;
+                    this.onmessage({ data: new Uint8Array([0x90, 0x03, packetIdMsb, packetIdLsb, 0x00]).buffer });
+                    setTimeout(() => this.close(), 3);
+                }
+            }
+
+            close() {
+                this.readyState = 3;
+                if (typeof this.onclose === "function") this.onclose();
+            }
+        }
+
+        window.WebSocket = FakeWebSocket;
+        try {
+            const { state } = await import("/js/state.js");
+            const { onHostChannelClose } = await import("/js/guest.js");
+            const { showView, els } = await import("/js/ui.js");
+            const { renderTable } = await import("/js/render.js");
+
+            state.role = "guest";
+            state.currentView = "table";
+            state.roomId = "room-exhaust";
+            state.guestAutoRejoinEnabled = true;
+            state.guestRemoteState = { round: 1, roundTitle: "", started: true, revealed: false, players: [] };
+            showView("table");
+            renderTable();
+
+            const fakeChannel = { readyState: "open", close() {} };
+            state.guestChannel = fakeChannel;
+            onHostChannelClose(fakeChannel);
+            for (let index = 0; index < 4; index += 1) {
+                await new Promise((resolve) => setTimeout(resolve, 40));
+                if (state.guestChannel && typeof state.guestChannel.close === "function") {
+                    state.guestChannel.close();
+                }
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            return {
+                notice: String(els.tableNotice.textContent || ""),
+                status: String(els.connectionStatusText.textContent || "")
+            };
+        } finally {
+            delete window.__PP_TEST_REJOIN_MAX_RETRIES;
+            window.WebSocket = originalWebSocket;
+            window.setTimeout = originalSetTimeout;
+        }
+    });
+
+    expect(result.notice).toContain("Could not reconnect automatically");
+    expect(result.status).not.toContain("Reconnecting to host...");
+});
+
+test("guest quick-join close while awaiting approval shows actionable retry state", async ({ page }) => {
+    await openHome(page);
+
+    const result = await page.evaluate(async () => {
+        const originalWebSocket = window.WebSocket;
+        const originalSetTimeout = window.setTimeout;
+        window.__PP_TEST_QUICK_JOIN_RETRY_MAX = 1;
+        const OPEN = 1;
+        window.setTimeout = (handler, timeout, ...args) => {
+            const clamped = Math.min(Number(timeout || 0), 12);
+            return originalSetTimeout(handler, clamped, ...args);
+        };
+
+        class FakeWebSocket {
+            static OPEN = OPEN;
+
+            constructor() {
+                this.binaryType = "arraybuffer";
+                this.readyState = 0;
+                this.onopen = null;
+                this.onmessage = null;
+                this.onclose = null;
+                setTimeout(() => {
+                    this.readyState = OPEN;
+                    if (typeof this.onopen === "function") this.onopen();
+                }, 0);
+            }
+
+            send(data) {
+                const bytes = new Uint8Array(data);
+                const packetType = bytes[0] >> 4;
+                if (packetType === 1 && typeof this.onmessage === "function") {
+                    this.onmessage({ data: new Uint8Array([0x20, 0x02, 0x00, 0x00]).buffer });
+                    return;
+                }
+                if (packetType === 8 && typeof this.onmessage === "function") {
+                    const packetIdMsb = bytes[2] || 0x00;
+                    const packetIdLsb = bytes[3] || 0x01;
+                    this.onmessage({ data: new Uint8Array([0x90, 0x03, packetIdMsb, packetIdLsb, 0x00]).buffer });
+                    setTimeout(() => this.close(), 4);
+                    return;
+                }
+            }
+
+            close() {
+                this.readyState = 3;
+                if (typeof this.onclose === "function") this.onclose();
+            }
+        }
+
+        window.WebSocket = FakeWebSocket;
+        try {
+            const { state } = await import("/js/state.js");
+            const { connectGuestByRoomCode } = await import("/js/guest.js");
+            const { showView, els } = await import("/js/ui.js");
+
+            state.displayName = "GuestQuickClose";
+            state.role = "guest";
+            showView("guestConnect");
+            await connectGuestByRoomCode("room-awaiting-approval", "");
+            await new Promise((resolve) => setTimeout(resolve, 600));
+
+            return {
+                notice: String(els.guestConnectNotice.textContent || ""),
+                status: String(els.connectionStatusText.textContent || "")
+            };
+        } finally {
+            delete window.__PP_TEST_QUICK_JOIN_RETRY_MAX;
+            window.WebSocket = originalWebSocket;
+            window.setTimeout = originalSetTimeout;
+        }
+    });
+
+    expect(result.notice).toContain("Click Join Room to retry");
+    expect(result.status).toContain("Waiting for host approval");
+});

@@ -112,6 +112,25 @@ function normalizeApprovedGuestIds(idsRaw, localId, fallbackPlayers = null) {
     return approvedIds;
 }
 
+function normalizePendingRejoinRequests(requestsRaw, localId) {
+    if (!Array.isArray(requestsRaw)) return [];
+    const normalized = [];
+    const seen = new Set();
+    for (const entry of requestsRaw) {
+        if (!entry || typeof entry !== "object") continue;
+        const id = normalizeId(entry.id);
+        if (!id || id === localId || seen.has(id)) continue;
+        seen.add(id);
+        const name = normalizeName(entry.name, "Guest");
+        const requestedAtRaw = Number(entry.requestedAt);
+        const requestedAt = Number.isFinite(requestedAtRaw) && requestedAtRaw > 0
+            ? Math.floor(requestedAtRaw)
+            : Date.now();
+        normalized.push({ id, name, requestedAt });
+    }
+    return normalized;
+}
+
 function normalizeGuestPlayers(playersRaw) {
     if (!Array.isArray(playersRaw)) return [];
     const normalized = [];
@@ -166,6 +185,7 @@ function buildSnapshotFromState() {
             localId,
             session.players
         );
+        const hostPendingRejoinRequests = normalizePendingRejoinRequests(state.hostPendingRejoinRequests, localId);
         return {
             v: SNAPSHOT_VERSION,
             savedAt: Date.now(),
@@ -177,6 +197,7 @@ function buildSnapshotFromState() {
             hostAutoApproveKnownRejoin: !!state.hostAutoApproveKnownRejoin,
             hostRoomPin: sanitizeText(state.hostRoomPin || "", 20),
             hostApprovedGuestIds,
+            hostPendingRejoinRequests,
             currentView: normalizeRoleView("host", state.currentView),
             roomId: normalizeId(state.roomId || localId) || localId,
             selectedVote,
@@ -229,6 +250,10 @@ function normalizeLoadedSnapshot(snapshotRaw) {
             localId,
             session.players
         );
+        const hostPendingRejoinRequests = normalizePendingRejoinRequests(
+            snapshotRaw.hostPendingRejoinRequests,
+            localId
+        );
         return {
             role: "host",
             localId,
@@ -238,6 +263,7 @@ function normalizeLoadedSnapshot(snapshotRaw) {
             hostAutoApproveKnownRejoin,
             hostRoomPin: sanitizeText(snapshotRaw.hostRoomPin || "", 20),
             hostApprovedGuestIds,
+            hostPendingRejoinRequests,
             currentView,
             roomId: roomId || localId,
             selectedVote,

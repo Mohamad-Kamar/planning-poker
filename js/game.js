@@ -2,6 +2,8 @@ import { NUMERIC_VOTES, VOTE_VALUES, state } from "./state.js";
 import { log } from "./log.js";
 import { saveSessionSnapshot } from "./persistence.js";
 
+const STATS_PLACEHOLDER = "--";
+
 export function setLocalVote(vote, deps) {
     if (vote !== null && !VOTE_VALUES.includes(vote)) return;
 
@@ -41,23 +43,16 @@ export function hostApplyVote(playerId, vote, deps) {
 export function getRenderablePlayersForUI() {
     if (state.role === "host" && state.session) {
         const revealed = state.session.revealed;
-        return getHostPlayersAsArray(true).map((player) => ({
-            id: player.id,
-            name: player.name,
-            connected: player.connected,
-            vote: revealed ? player.vote : null,
-            voted: player.vote != null
-        }));
+        return getHostPlayersAsArray(true).map((player) => {
+            return toRenderablePlayer(player, revealed, player.vote != null);
+        });
     }
 
     if (state.role === "guest" && state.guestRemoteState) {
-        return state.guestRemoteState.players.map((player) => ({
-            id: player.id,
-            name: player.name,
-            connected: !!player.connected,
-            vote: state.guestRemoteState.revealed ? player.vote : null,
-            voted: !!player.voted
-        }));
+        const revealed = !!state.guestRemoteState.revealed;
+        return state.guestRemoteState.players.map((player) => {
+            return toRenderablePlayer(player, revealed, !!player.voted);
+        });
     }
 
     return [];
@@ -111,13 +106,7 @@ export function getHostPlayersAsArray(includeVotes) {
 
 export function renderStatsValues(players, revealed) {
     if (!revealed) {
-        return {
-            average: "-",
-            median: "-",
-            min: "-",
-            max: "-",
-            consensus: "-"
-        };
+        return createHiddenStatsValues();
     }
 
     const voted = players.filter((p) => p.vote != null);
@@ -128,11 +117,31 @@ export function renderStatsValues(players, revealed) {
         .sort((a, b) => a - b);
 
     return {
-        average: numeric.length ? formatNumber(avg(numeric)) : "-",
-        median: numeric.length ? formatNumber(median(numeric)) : "-",
-        min: numeric.length ? String(numeric[0]) : "-",
-        max: numeric.length ? String(numeric[numeric.length - 1]) : "-",
+        average: numeric.length ? formatNumber(avg(numeric)) : STATS_PLACEHOLDER,
+        median: numeric.length ? formatNumber(median(numeric)) : STATS_PLACEHOLDER,
+        min: numeric.length ? String(numeric[0]) : STATS_PLACEHOLDER,
+        max: numeric.length ? String(numeric[numeric.length - 1]) : STATS_PLACEHOLDER,
         consensus: hasConsensus(voteValues) ? "Yes" : "No"
+    };
+}
+
+function createHiddenStatsValues() {
+    return {
+        average: STATS_PLACEHOLDER,
+        median: STATS_PLACEHOLDER,
+        min: STATS_PLACEHOLDER,
+        max: STATS_PLACEHOLDER,
+        consensus: STATS_PLACEHOLDER
+    };
+}
+
+function toRenderablePlayer(player, revealed, voted) {
+    return {
+        id: player.id,
+        name: player.name,
+        connected: !!player.connected,
+        vote: revealed ? player.vote : null,
+        voted: !!voted
     };
 }
 

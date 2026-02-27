@@ -92,24 +92,17 @@ export function renderConnectionStrategySections() {
 export function renderTable() {
     const isHost = state.role === "host";
     const isGuestConnected = !!(state.guestChannel && state.guestChannel.readyState === "open");
+    const isRevealed = getCurrentRevealFlag();
+    const roundInfo = getCurrentRoundInfo(isHost);
+
     els.tableRoleChip.textContent = isHost ? "Host" : "Guest";
     els.leaveSessionBtn.textContent = isHost ? "Back to Lobby" : (isGuestConnected ? "Leave" : "Reconnect");
     els.hostRevealBtn.style.display = isHost ? "inline-block" : "none";
     els.hostResetBtn.style.display = isHost ? "inline-block" : "none";
-
-    const currentRound = isHost && state.session
-        ? state.session.round
-        : state.guestRemoteState
-            ? state.guestRemoteState.round
-            : 1;
-    const currentRoundTitle = isHost && state.session
-        ? state.session.roundTitle
-        : state.guestRemoteState
-            ? state.guestRemoteState.roundTitle
-            : "";
-    els.tableSubtitle.textContent = currentRoundTitle
-        ? "Round " + currentRound + " - " + currentRoundTitle
-        : "Round " + currentRound;
+    els.hostRevealBtn.textContent = isRevealed ? "Conceal" : "Reveal";
+    els.tableSubtitle.textContent = roundInfo.title
+        ? "Round " + roundInfo.round + " - " + roundInfo.title
+        : "Round " + roundInfo.round;
     if (els.hostRoundTitleInput) {
         if (isHost) {
             els.hostRoundTitleInput.style.display = "block";
@@ -126,7 +119,7 @@ export function renderTable() {
 
     const players = getRenderablePlayersForUI();
     renderTablePlayers(players);
-    renderStats(players, getCurrentRevealFlag());
+    renderStats(players, isRevealed);
     renderVotePalette();
 
     if (isHost) {
@@ -135,6 +128,25 @@ export function renderTable() {
         return;
     }
     updateConnectionStatus(isGuestConnected, isGuestConnected ? "Connected to host" : "Disconnected");
+}
+
+function getCurrentRoundInfo(isHost) {
+    if (isHost && state.session) {
+        return {
+            round: state.session.round,
+            title: state.session.roundTitle
+        };
+    }
+    if (state.guestRemoteState) {
+        return {
+            round: state.guestRemoteState.round,
+            title: state.guestRemoteState.roundTitle
+        };
+    }
+    return {
+        round: 1,
+        title: ""
+    };
 }
 
 export function renderTablePlayers(players) {
@@ -188,11 +200,6 @@ export function renderVotePalette() {
 
 export function renderStats(players, revealed) {
     const values = renderStatsValues(players, revealed);
-    if (!revealed) {
-        els.statsBar.classList.remove("visible");
-    } else {
-        els.statsBar.classList.add("visible");
-    }
     els.statAverage.textContent = values.average;
     els.statMedian.textContent = values.median;
     els.statMin.textContent = values.min;

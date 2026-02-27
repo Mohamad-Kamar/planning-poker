@@ -11,6 +11,11 @@ import { broadcastState } from "./host-session.js";
 import { sendJson } from "./messaging.js";
 export { sendJson } from "./messaging.js";
 
+const HOST_RECOVERY_RETRY_BASE_MS = 1000;
+const HOST_RECOVERY_RETRY_MAX_MS = 8000;
+let hostRecoveryRetryTimer = null;
+let hostRecoveryRetryAttempts = 0;
+
 export function startHostRecoveryRelayListener() {
     if (state.role !== "host" || !state.session) return;
     const roomId = state.roomId || state.localId;
@@ -20,21 +25,26 @@ export function startHostRecoveryRelayListener() {
 
     const relayChannel = createMqttRelayChannel("host", roomId, state.localId, {
         onOpen: (channel) => {
+            clearHostRecoveryRetryTimer();
+            hostRecoveryRetryAttempts = 0;
             state.hostRecoveryRelay = channel;
             log.info("host", "Host recovery relay ready", { roomId });
         },
         onClose: () => {
-            if (state.hostRecoveryRelay === relayChannel) {
-                state.hostRecoveryRelay = null;
-            }
+            state.hostRecoveryRelay = null;
             log.warn("host", "Host recovery relay closed", { roomId });
+            scheduleHostRecoveryRelayRetry("channel-closed", true);
         },
         onMessage: (payload, fromGuestId) => {
             onHostRecoveryRelayMessage(payload, fromGuestId, relayChannel);
         },
         onFailure: (errorInfo) => {
+            if (state.hostRecoveryRelay === relayChannel) {
+                state.hostRecoveryRelay = null;
+            }
             const reason = errorInfo && errorInfo.reason ? errorInfo.reason : "unknown";
             log.warn("host", "Host recovery relay failed", { roomId, reason });
+            scheduleHostRecoveryRelayRetry("failure-" + reason, true);
             if (state.currentView === "hostLobby") {
                 showNotice(
                     els.hostLobbyNotice,
@@ -454,4 +464,39 @@ function forgetApprovedGuestId(guestId) {
     const approved = ensureApprovedGuestIdList();
     if (!approved.length) return;
     state.hostApprovedGuestIds = approved.filter((id) => id !== guestId);
+}
+
+function clearHostRecoveryRetryTimer() {
+    if (!hostRecoveryRetryTimer) return;
+    clearTimeout(hostRecoveryRetryTimer);
+    hostRecoveryRetryTimer = null;
+}
+
+function scheduleHostRecoveryRelayRetry(reason, immediate = false) {
+    if (hostRecoveryRetryTimer) return;
+    if (state.role !== "host" || !state.session) return;
+    if (state.hostRecoveryRelay && state.hostRecoveryRelay.readyState === "open") return;
+    if (state.hostRecoveryRelay && state.hostRecoveryRelay.readyState === "connecting") return;
+
+    const baseDelay = Number(window.__PP_TEST_HOST_RECOVERY_RETRY_MS);
+    const retryBaseMs = Number.isFinite(baseDelay) && baseDelay >= 0
+        ? Math.floor(baseDelay)
+        : HOST_RECOVERY_RETRY_BASE_MS;
+    const delayMs = immediate
+        ? 0
+        : Math.min(
+        retryBaseMs * (2 ** hostRecoveryRetryAttempts),
+        HOST_RECOVERY_RETRY_MAX_MS
+    );
+    hostRecoveryRetryAttempts += 1;
+    hostRecoveryRetryTimer = setTimeout(() => {
+        hostRecoveryRetryTimer = null;
+        if (state.role !== "host" || !state.session) return;
+        startHostRecoveryRelayListener();
+    }, delayMs);
+    log.info("host", "Scheduling host recovery relay reconnect", {
+        reason,
+        attempt: hostRecoveryRetryAttempts,
+        delayMs
+    });
 }

@@ -138,3 +138,38 @@ test("legacy host snapshot derives approved guests from players", async ({ page 
     });
     expect(approvedIds).toEqual(["guestlegacy01"]);
 });
+
+test("host snapshot preserves pending rejoin requests across reload", async ({ page }) => {
+    await openHome(page);
+    await page.evaluate((snapshot) => {
+        window.sessionStorage.setItem("planningPoker.session", JSON.stringify(snapshot));
+    }, hostSnapshot({
+        hostPendingRejoinRequests: [
+            { id: "guest-pending-1", name: "Pending One", requestedAt: Date.now() - 1_000 },
+            { id: "guest-pending-2", name: "Pending Two", requestedAt: Date.now() }
+        ]
+    }));
+
+    await page.reload();
+    const pending = await page.evaluate(async () => {
+        const { state } = await import("/js/state.js");
+        return state.hostPendingRejoinRequests;
+    });
+    expect(Array.isArray(pending)).toBe(true);
+    expect(pending.map((entry) => entry.id)).toEqual(["guest-pending-1", "guest-pending-2"]);
+});
+
+test("guest table snapshot without remote payload still restores table reconnect flow", async ({ page }) => {
+    await openHome(page);
+    await page.evaluate((snapshot) => {
+        window.sessionStorage.setItem("planningPoker.session", JSON.stringify(snapshot));
+    }, guestSnapshot({
+        currentView: "table",
+        roomId: "room-missing-remote",
+        guestRemoteState: null
+    }));
+
+    await page.reload();
+    await expect(page.locator("#tableView.active")).toBeVisible();
+    await expect(page.locator("#tableNotice")).toContainText(/Session restored|Trying to reconnect|Attempting to reconnect/);
+});

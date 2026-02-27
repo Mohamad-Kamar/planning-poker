@@ -57,16 +57,18 @@ export function onHostStartGame() {
 
 export function onHostRevealVotes() {
     if (state.role !== "host" || !state.session) return;
-    if (state.session.revealed) return;
-    state.session.revealed = true;
-    broadcastMessageToGuests({
-        t: "reveal",
-        round: state.session.round,
-        players: getHostPlayersAsArray(true)
-    });
+    const revealedNext = !state.session.revealed;
+    state.session.revealed = revealedNext;
+    if (revealedNext) {
+        broadcastMessageToGuests({
+            t: "reveal",
+            round: state.session.round,
+            players: getHostPlayersAsArray(true)
+        });
+    }
     broadcastState();
     renderTable();
-    log.info("game", "Reveal triggered", { round: state.session.round });
+    log.info("game", revealedNext ? "Reveal triggered" : "Conceal triggered", { round: state.session.round });
 }
 
 export function onHostNewRound() {
