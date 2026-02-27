@@ -117,6 +117,7 @@ In DevTools:
 - Relay traffic is TLS-protected in transit, but broker operators can read plaintext payloads.
 - Room PIN is lightweight access control, not enterprise-grade auth.
 - No bundled TURN credentials are provided for manual WebRTC mode.
+- Public broker usage expectations are documented in `PUBLIC_BROKER_DEPENDENCY_POLICY.md`.
 
 ## License
 
