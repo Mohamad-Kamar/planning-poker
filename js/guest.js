@@ -802,6 +802,13 @@ export function handleGuestInboundMessage(rawData, channel) {
         return;
     }
 
+    if (message.t === "conceal" && state.guestRemoteState) {
+        state.guestRemoteState.revealed = false;
+        renderTable();
+        saveSessionSnapshot();
+        return;
+    }
+
     if (message.t === "reset") {
         state.selectedVote = null;
         if (state.guestRemoteState) {

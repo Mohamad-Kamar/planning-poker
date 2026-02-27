@@ -65,6 +65,13 @@ export function onHostRevealVotes() {
             round: state.session.round,
             players: getHostPlayersAsArray(true)
         });
+    } else {
+        // Mirror reveal with an explicit conceal command so guests can transition
+        // even if a subsequent state sync packet is delayed or dropped.
+        broadcastMessageToGuests({
+            t: "conceal",
+            round: state.session.round
+        });
     }
     broadcastState();
     renderTable();
