@@ -284,7 +284,7 @@ export function handleHostInboundMessage(guestId, rawData) {
     }
 }
 
-function onHostRecoveryRelayMessage(rawData, fromGuestId, relayChannel) {
+export function onHostRecoveryRelayMessage(rawData, fromGuestId, relayChannel) {
     const guestId = String(fromGuestId || "").trim();
     if (!guestId || guestId === state.localId) return;
     if (state.role !== "host" || !state.session) return;
