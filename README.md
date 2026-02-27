@@ -119,6 +119,10 @@ In DevTools:
 - No bundled TURN credentials are provided for manual WebRTC mode.
 - Public broker usage expectations are documented in `PUBLIC_BROKER_DEPENDENCY_POLICY.md`.
 
+## Future Improvements
+
+- Planned reliability, QoL, and maintainability follow-ups are tracked in `FUTURE_IMPROVEMENTS.md`.
+
 ## License
 
 ISC
