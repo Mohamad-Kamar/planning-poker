@@ -4,11 +4,12 @@ Browser-only planning poker app with no backend.
 
 ## Features
 
-- Host/guest flow with manual join and response codes.
-- Real-time updates over WebRTC DataChannels.
+- MQTT Quick Join as the default flow (room code or share link).
+- Optional manual WebRTC signaling flow kept as fallback in Connection Settings.
 - Multiple guests per host session.
 - Host can remove a guest from the session.
-- Automatic fallback to MQTT relay when direct peer connection fails.
+- Host-controlled reveal/new round/round title with state sync.
+- Optional room PIN and host approval controls for joins.
 - Session snapshot restore after refresh in the same tab.
 - Built-in Playwright E2E tests.
 
@@ -24,27 +25,35 @@ Open `http://127.0.0.1:8000` in a modern browser.
 
 ## How To Connect
 
-1. Host clicks **Create Room**.
-2. Guest clicks **Join Room** and gets a join code.
-3. Guest shares that code with host.
-4. Host pastes it and clicks **Accept Guest**.
-5. Host sends the generated response code back.
-6. Guest pastes response code and clicks **Connect**.
+### Default flow (MQTT Quick Join)
 
-Codes support both plain and formatted copy modes; pasted input can include spaces/newlines.
+1. Host clicks **Create Room**.
+2. Host shares **Room Code** or **Join Link**.
+3. Guest clicks **Join Room**, enters room code, then clicks **Join Room**.
+4. Host approves the pending join request.
+5. Guest enters table and all game operations sync in real time.
+
+### Manual fallback (optional)
+
+Use **Connection Settings** -> set mode to **Manual WebRTC Signaling**, then use the old join/response code copy-paste flow.
 
 ## Connection And Recovery Behavior
 
-- Direct WebRTC is attempted first using default STUN servers.
-- On direct-path failure, the app attempts ICE restart, then falls back to MQTT relay (`wss://broker.hivemq.com:8884/mqtt`).
+- Default transport uses MQTT relay (`wss://broker.hivemq.com:8884/mqtt`).
+- Host keeps a relay recovery listener for reconnect and join requests.
+- Guest reconnect attempts happen automatically over relay with exponential backoff.
 - A sanitized session snapshot is saved in `sessionStorage` (up to ~12 hours) and can restore room/table context on refresh in the same tab.
-- Host refresh restores host state and starts a relay recovery listener so guests can rejoin.
-- Guest reconnect attempts can happen automatically over relay; manual join/response exchange remains available as fallback.
 - If the host leaves and does not return, guests cannot continue that live session and need a new host session.
 
-## Optional ICE Settings
+## Connection Settings
 
-Use **Connection Settings** to add custom ICE servers.
+Connection Settings now include:
+
+- Default connection mode (MQTT Quick Join or Manual WebRTC signaling).
+- MQTT admission controls:
+  - Require host approval for first join.
+  - Auto-approve known rejoins.
+- Optional custom ICE servers (used by manual WebRTC mode).
 
 Input format (one server per line):
 
@@ -61,10 +70,11 @@ stun:stun.example.com:3478
 
 ## Troubleshooting
 
-- If direct connection fails, wait a few seconds for relay fallback.
-- If relay fails, regenerate codes and retry.
-- Try another network if both direct and relay fail.
-- Add your own STUN/TURN servers in **Connection Settings** if available.
+- If room join fails, verify room code and optional PIN.
+- If host approval is required, wait for host to approve in the lobby.
+- If relay fails, retry join and/or try another network.
+- For manual mode issues, regenerate codes and confirm full copy/paste.
+- Add your own STUN/TURN servers in **Connection Settings** for manual WebRTC mode.
 
 ## Development And Testing
 
@@ -103,10 +113,10 @@ In DevTools:
 
 ## Limitations
 
-- No bundled TURN credentials are provided.
-- Relay uses a public broker and is best effort.
+- MQTT relay uses a public broker and is best effort.
 - Relay traffic is TLS-protected in transit, but broker operators can read plaintext payloads.
-- `CompressionStream` support varies by browser; signaling falls back to uncompressed payloads.
+- Room PIN is lightweight access control, not enterprise-grade auth.
+- No bundled TURN credentials are provided for manual WebRTC mode.
 
 ## License
 
