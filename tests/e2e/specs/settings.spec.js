@@ -1,11 +1,10 @@
 const { test, expect } = require("@playwright/test");
-const { openHome } = require("../helpers");
+const { openConnectionSettings, openHome, saveConnectionSettings, setConnectionPreferences } = require("../helpers");
 
 test("connection settings dialog persists custom ICE servers", async ({ page }) => {
     await openHome(page);
 
-    await page.locator("#iceSettingsBtn").click();
-    await expect(page.locator("#iceSettingsDialog")).toBeVisible();
+    await openConnectionSettings(page);
     await expect(page.locator("#defaultIceServersList")).toContainText("stun:stun.l.google.com:19302");
 
     const customServers = [
@@ -13,10 +12,10 @@ test("connection settings dialog persists custom ICE servers", async ({ page }) 
         "stun:stun.example.com:3478"
     ].join("\n");
     await page.locator("#customIceServersInput").fill(customServers);
-    await page.locator("#iceSettingsSaveBtn").click();
+    await saveConnectionSettings(page);
     await expect(page.locator("#homeNotice")).toContainText("Connection settings saved");
 
-    await page.locator("#iceSettingsBtn").click();
+    await openConnectionSettings(page);
     await expect(page.locator("#customIceServersInput")).toHaveValue(/turn:example\.com:3478\?transport=tcp/);
     await expect(page.locator("#customIceServersInput")).toHaveValue(/stun:stun\.example\.com:3478/);
     await page.locator("#iceSettingsCancelBtn").click();
@@ -24,15 +23,14 @@ test("connection settings dialog persists custom ICE servers", async ({ page }) 
 
 test("connection settings persist strategy and MQTT admission toggles", async ({ page }) => {
     await openHome(page);
-    await page.locator("#iceSettingsBtn").click();
-    await expect(page.locator("#iceSettingsDialog")).toBeVisible();
-    await page.locator("#connectionStrategySelect").selectOption("manualWebRtc");
-    await page.locator("#hostRequireApprovalFirstJoinCheckbox").uncheck();
-    await page.locator("#hostAutoApproveKnownRejoinCheckbox").uncheck();
-    await page.locator("#iceSettingsSaveBtn").click();
+    await setConnectionPreferences(page, {
+        mode: "manualWebRtc",
+        hostRequireApprovalFirstJoin: false,
+        hostAutoApproveKnownRejoin: false
+    });
     await expect(page.locator("#homeNotice")).toContainText("Connection settings saved");
 
-    await page.locator("#iceSettingsBtn").click();
+    await openConnectionSettings(page);
     await expect(page.locator("#connectionStrategySelect")).toHaveValue("manualWebRtc");
     await expect(page.locator("#hostRequireApprovalFirstJoinCheckbox")).not.toBeChecked();
     await expect(page.locator("#hostAutoApproveKnownRejoinCheckbox")).not.toBeChecked();

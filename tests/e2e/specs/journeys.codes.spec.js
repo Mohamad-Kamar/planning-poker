@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { createHost, openHome, readCode, setConnectionMode } = require("../helpers");
+const { createHost, openHome, readCode, setConnectionMode, setConnectionModeForPages } = require("../helpers");
 
 function normalizeWhitespace(value) {
     return String(value || "").replace(/\s+/g, "");
@@ -7,8 +7,8 @@ function normalizeWhitespace(value) {
 
 test("host clear button resets incoming join code textarea", async ({ page }) => {
     await openHome(page);
+    await setConnectionMode(page, "manualWebRtc");
     await createHost(page, "HostClearAction");
-    await page.locator("#hostManualFallbackDetails > summary").click();
 
     await page.getByTestId("input-host-join-code").fill("some-join-code");
     await page.getByTestId("btn-clear-host-join-code").click();
@@ -86,8 +86,7 @@ test("host copy plain and formatted response buttons copy expected values", asyn
 
     await openHome(host);
     await openHome(guest);
-    await setConnectionMode(host, "manualWebRtc");
-    await setConnectionMode(guest, "manualWebRtc");
+    await setConnectionModeForPages([host, guest], "manualWebRtc");
     await createHost(host, "HostCopy");
     await guest.locator("#displayNameInput").fill("GuestCopyHost");
     await guest.getByTestId("btn-join-room").click();

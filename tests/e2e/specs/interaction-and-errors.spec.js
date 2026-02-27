@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { createHost, openHome, readCode, setConnectionMode } = require("../helpers");
+const { createHost, openHome, readCode, setConnectionMode, setConnectionModeForPages } = require("../helpers");
 
 test("escape exits guest connect view back to home", async ({ page }) => {
     await openHome(page);
@@ -74,9 +74,7 @@ test("guest rejects response code intended for a different guest", async ({ brow
     await openHome(host);
     await openHome(guestA);
     await openHome(guestB);
-    await setConnectionMode(host, "manualWebRtc");
-    await setConnectionMode(guestA, "manualWebRtc");
-    await setConnectionMode(guestB, "manualWebRtc");
+    await setConnectionModeForPages([host, guestA, guestB], "manualWebRtc");
     await createHost(host, "HostWrongTarget");
 
     await guestA.locator("#displayNameInput").fill("GuestA");
