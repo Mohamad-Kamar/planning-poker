@@ -10,6 +10,7 @@ export function setVoteSelectHandler(handler) {
 
 export function renderHostLobby() {
     if (!state.session) return;
+    renderConnectionStrategySections();
     const players = getHostPlayersAsArray(true);
     els.hostPlayerList.innerHTML = players.map((player) => {
         const roleTag = player.isHost ? "Host" : "Guest";
@@ -53,6 +54,38 @@ export function renderHostLobby() {
                 </div>
             </div>`;
         }).join("");
+    }
+
+    if (els.hostRoomCode) {
+        const roomCode = String(state.roomId || state.localId || "");
+        els.hostRoomCode.textContent = roomCode || "Not ready";
+        const joinUrl = roomCode
+            ? (window.location.origin + window.location.pathname + "?room=" + encodeURIComponent(roomCode))
+            : "";
+        if (els.hostRoomQrImage) {
+            els.hostRoomQrImage.src = joinUrl
+                ? ("https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=" + encodeURIComponent(joinUrl))
+                : "";
+        }
+    }
+    if (els.hostRoomPinInput && document.activeElement !== els.hostRoomPinInput) {
+        els.hostRoomPinInput.value = state.hostRoomPin || "";
+    }
+}
+
+export function renderConnectionStrategySections() {
+    const manualMode = state.connectionStrategy === "manualWebRtc";
+    if (els.hostRoomAccessPanel) {
+        els.hostRoomAccessPanel.style.display = manualMode ? "none" : "";
+    }
+    if (els.hostManualFallbackDetails) {
+        els.hostManualFallbackDetails.open = manualMode;
+    }
+    if (els.guestQuickJoinPanel) {
+        els.guestQuickJoinPanel.style.display = manualMode ? "none" : "";
+    }
+    if (els.guestManualFallbackDetails) {
+        els.guestManualFallbackDetails.open = manualMode;
     }
 }
 

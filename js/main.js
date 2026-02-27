@@ -19,7 +19,9 @@ import {
     updateConnectionStatus,
     updateCurrentUserBadge
 } from "./ui.js";
-import { renderHostLobby, renderTable, renderVotePalette, setVoteSelectHandler } from "./render.js";
+import { getActiveStrategy } from "./connection-strategies/index.js";
+import { loadConnectionSettings, saveConnectionSettings } from "./connection-settings.js";
+import { renderConnectionStrategySections, renderHostLobby, renderTable, renderVotePalette, setVoteSelectHandler } from "./render.js";
 import { setLocalVote } from "./game.js";
 import {
     configureHost,
@@ -37,6 +39,7 @@ import {
 } from "./host.js";
 import {
     onGuestConnectWithResponseCode,
+    connectGuestByRoomCode,
     notifyGuestLeaving,
     onRegenerateGuestOffer,
     sendJson as guestSendJson,
@@ -51,6 +54,10 @@ import { sanitizeText } from "./sanitize.js";
 init();
 
 function init() {
+    const connectionSettings = loadConnectionSettings();
+    state.connectionStrategy = connectionSettings.strategy;
+    state.hostRequireApprovalFirstJoin = connectionSettings.hostRequireApprovalFirstJoin;
+    state.hostAutoApproveKnownRejoin = connectionSettings.hostAutoApproveKnownRejoin;
     state.displayName = loadStoredDisplayName();
     els.displayNameInput.value = state.displayName;
     updateCurrentUserBadge(state.displayName);
@@ -69,6 +76,7 @@ function init() {
     });
 
     renderVotePalette();
+    renderConnectionStrategySections();
     wireEvents();
 
     els.copyGuestJoinCodeBtn.disabled = true;
@@ -159,10 +167,43 @@ function wireHostEvents() {
         clearSessionSnapshot();
         showView("home");
     });
+    if (els.copyHostRoomCodeBtn) {
+        els.copyHostRoomCodeBtn.addEventListener("click", async () => {
+            await copyTextWithFeedback(String(state.roomId || state.localId || ""), els.copyHostRoomCodeBtn, "Copied");
+        });
+    }
+    if (els.copyHostJoinLinkBtn) {
+        els.copyHostJoinLinkBtn.addEventListener("click", async () => {
+            const roomCode = String(state.roomId || state.localId || "");
+            const joinUrl = roomCode
+                ? (window.location.origin + window.location.pathname + "?room=" + encodeURIComponent(roomCode))
+                : "";
+            await copyTextWithFeedback(joinUrl, els.copyHostJoinLinkBtn, "Copied");
+        });
+    }
+    if (els.hostRoomPinInput) {
+        els.hostRoomPinInput.addEventListener("input", () => {
+            state.hostRoomPin = String(els.hostRoomPinInput.value || "").trim().slice(0, 20);
+            saveSessionSnapshot();
+        });
+    }
 }
 
 function wireGuestEvents() {
     els.joinRoomBtn.addEventListener("click", onJoinRoom);
+    if (els.connectGuestRoomBtn) {
+        els.connectGuestRoomBtn.addEventListener("click", () => {
+            const activeStrategy = getActiveStrategy();
+            if (activeStrategy && typeof activeStrategy.connectGuestPrimary === "function") {
+                activeStrategy.connectGuestPrimary();
+                return;
+            }
+            connectGuestByRoomCode(
+                els.guestRoomCodeInput ? els.guestRoomCodeInput.value : "",
+                els.guestRoomPinInput ? els.guestRoomPinInput.value : ""
+            );
+        });
+    }
     els.copyGuestJoinCodeBtn.addEventListener("click", async () => {
         await copyTextWithFeedback(state.guestJoinCodeRaw, els.copyGuestJoinCodeBtn, "Copied");
     });
@@ -260,6 +301,13 @@ function wireKeyboardEvents() {
                 event.preventDefault();
                 onGuestConnectWithResponseCode();
             }
+            if (document.activeElement === els.guestRoomCodeInput) {
+                event.preventDefault();
+                connectGuestByRoomCode(
+                    els.guestRoomCodeInput ? els.guestRoomCodeInput.value : "",
+                    els.guestRoomPinInput ? els.guestRoomPinInput.value : ""
+                );
+            }
         }
     });
 }
@@ -274,6 +322,16 @@ function openIceSettingsDialog() {
         .join("\n");
     els.defaultIceServersList.textContent = defaultLines;
     els.customIceServersInput.value = formatIceServersForInput(loadUserIceServers());
+    const savedConnectionSettings = loadConnectionSettings();
+    if (els.connectionStrategySelect) {
+        els.connectionStrategySelect.value = savedConnectionSettings.strategy;
+    }
+    if (els.hostRequireApprovalFirstJoinCheckbox) {
+        els.hostRequireApprovalFirstJoinCheckbox.checked = savedConnectionSettings.hostRequireApprovalFirstJoin;
+    }
+    if (els.hostAutoApproveKnownRejoinCheckbox) {
+        els.hostAutoApproveKnownRejoinCheckbox.checked = savedConnectionSettings.hostAutoApproveKnownRejoin;
+    }
     showNotice(els.iceSettingsNotice, "", "info");
     els.iceSettingsDialog.showModal();
 }
@@ -281,10 +339,23 @@ function openIceSettingsDialog() {
 function onSaveIceSettings() {
     const parsedServers = parseIceServerInput(els.customIceServersInput.value);
     saveUserIceServers(parsedServers);
+    const savedConnectionSettings = saveConnectionSettings({
+        strategy: els.connectionStrategySelect ? els.connectionStrategySelect.value : state.connectionStrategy,
+        hostRequireApprovalFirstJoin: els.hostRequireApprovalFirstJoinCheckbox
+            ? !!els.hostRequireApprovalFirstJoinCheckbox.checked
+            : state.hostRequireApprovalFirstJoin,
+        hostAutoApproveKnownRejoin: els.hostAutoApproveKnownRejoinCheckbox
+            ? !!els.hostAutoApproveKnownRejoinCheckbox.checked
+            : state.hostAutoApproveKnownRejoin
+    });
+    state.connectionStrategy = savedConnectionSettings.strategy;
+    state.hostRequireApprovalFirstJoin = savedConnectionSettings.hostRequireApprovalFirstJoin;
+    state.hostAutoApproveKnownRejoin = savedConnectionSettings.hostAutoApproveKnownRejoin;
+    renderConnectionStrategySections();
     if (els.iceSettingsDialog.open) {
         els.iceSettingsDialog.close();
     }
-    showNotice(getCurrentNoticeElement(), "Connection settings saved. New connections will use updated ICE servers.", "info");
+    showNotice(getCurrentNoticeElement(), "Connection settings saved.", "info");
 }
 
 function getCurrentNoticeElement() {
@@ -297,12 +368,28 @@ function getCurrentNoticeElement() {
 function onCreateRoom() {
     const name = ensureDisplayName();
     if (!name) return;
+    const activeStrategy = getActiveStrategy();
+    if (activeStrategy && typeof activeStrategy.startHost === "function") {
+        activeStrategy.startHost(name);
+        return;
+    }
     startHostSession(name);
 }
 
 function onJoinRoom() {
     const name = ensureDisplayName();
     if (!name) return;
+    const activeStrategy = getActiveStrategy();
+    if (activeStrategy && typeof activeStrategy.startGuest === "function") {
+        activeStrategy.startGuest(name);
+        renderConnectionStrategySections();
+        const roomFromUrl = getRoomCodeFromUrl();
+        if (roomFromUrl && els.guestRoomCodeInput) {
+            els.guestRoomCodeInput.value = roomFromUrl;
+            void connectGuestByRoomCode(roomFromUrl, els.guestRoomPinInput ? els.guestRoomPinInput.value : "");
+        }
+        return;
+    }
     startGuestSession(name);
 }
 
@@ -323,9 +410,18 @@ function onLeaveOrBack() {
     if (state.currentView === "table" && !isGuestConnected()) {
         showView("guestConnect");
         setGuestStep(1);
-        showNotice(els.guestConnectNotice, "Session restored. Share a fresh join code with host to reconnect.", "info");
+        renderConnectionStrategySections();
         state.guestAutoRejoinEnabled = true;
-        void onRegenerateGuestOffer();
+        if (state.connectionStrategy === "manualWebRtc") {
+            showNotice(els.guestConnectNotice, "Session restored. Share a fresh join code with host to reconnect.", "info");
+            void onRegenerateGuestOffer();
+        } else {
+            if (els.guestRoomCodeInput && state.roomId) {
+                els.guestRoomCodeInput.value = state.roomId;
+            }
+            showNotice(els.guestConnectNotice, "Session restored. Retrying relay reconnect...", "info");
+            triggerGuestAutoRejoin("reconnect-button");
+        }
         saveSessionSnapshot();
         return;
     }
@@ -367,6 +463,9 @@ function restoreSessionFromSnapshot(snapshot) {
     if (!snapshot) return false;
 
     state.localId = snapshot.localId;
+    state.connectionStrategy = snapshot.connectionStrategy === "manualWebRtc" ? "manualWebRtc" : state.connectionStrategy;
+    state.hostRequireApprovalFirstJoin = snapshot.hostRequireApprovalFirstJoin !== false;
+    state.hostAutoApproveKnownRejoin = snapshot.hostAutoApproveKnownRejoin !== false;
     if (snapshot.displayName) {
         state.displayName = snapshot.displayName;
         els.displayNameInput.value = snapshot.displayName;
@@ -391,6 +490,7 @@ function restoreHostSnapshot(snapshot) {
     state.session = snapshot.session;
     state.hostPeers.clear();
     state.hostResponseCodeRaw = "";
+    state.hostRoomPin = snapshot.hostRoomPin || "";
     state.guestPeer = null;
     state.guestChannel = null;
     state.guestRemoteState = null;
@@ -466,8 +566,14 @@ function restoreGuestSnapshot(snapshot) {
         triggerGuestAutoRejoin("restored-session");
     } else {
         showView("guestConnect");
-        showNotice(els.guestConnectNotice, "Session restored. Generating a fresh join code...", "info");
-        void onRegenerateGuestOffer();
+        renderConnectionStrategySections();
+        showNotice(els.guestConnectNotice, "Session restored. Rejoin with room code or manual fallback.", "info");
+        if (els.guestRoomCodeInput && state.roomId) {
+            els.guestRoomCodeInput.value = state.roomId;
+        }
+        if (state.connectionStrategy === "manualWebRtc") {
+            void onRegenerateGuestOffer();
+        }
     }
     saveSessionSnapshot();
 }
@@ -491,6 +597,15 @@ export function storeDisplayName(name) {
 export function loadStoredDisplayName() {
     try {
         return sanitizeName(localStorage.getItem(STORAGE_NAME_KEY) || "");
+    } catch (_error) {
+        return "";
+    }
+}
+
+function getRoomCodeFromUrl() {
+    try {
+        const url = new URL(window.location.href);
+        return String(url.searchParams.get("room") || "").trim();
     } catch (_error) {
         return "";
     }

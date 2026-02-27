@@ -48,6 +48,27 @@ export function startGuestSession(displayName) {
     log.info("guest", "Join room clicked", { name: displayName });
 }
 
+export function startGuestQuickJoin(displayName) {
+    shutdownHost();
+    shutdownGuest();
+
+    state.role = "guest";
+    state.selectedVote = null;
+    state.guestRemoteState = null;
+    state.displayName = displayName;
+    state.guestResponseApplied = false;
+    state.guestJoinPin = "";
+    state.roomId = null;
+    state.guestAutoRejoinEnabled = true;
+    resetGuestRejoinState();
+    stopGuestPresenceLoop();
+    setGuestStep(1);
+    showView("guestConnect");
+    showNotice(els.guestConnectNotice, "Enter room code to join via relay.", "info");
+    saveSessionSnapshot();
+    log.info("guest", "Quick join selected", { name: displayName });
+}
+
 export async function onRegenerateGuestOffer() {
     try {
         state.role = "guest";
@@ -293,6 +314,22 @@ export function notifyGuestLeaving() {
     sendJson(state.guestChannel, { t: "leave" });
 }
 
+export async function connectGuestByRoomCode(roomCode, pin = "") {
+    const normalizedRoomCode = String(roomCode || "").trim();
+    if (!normalizedRoomCode) {
+        showNotice(els.guestConnectNotice, "Enter a room code first.", "warn");
+        return;
+    }
+    state.role = "guest";
+    state.roomId = normalizedRoomCode;
+    state.guestJoinPin = String(pin || "").trim();
+    state.guestAutoRejoinEnabled = true;
+    resetGuestRejoinState();
+    updateConnectionStatus(false, "Connecting to room...");
+    showNotice(els.guestConnectNotice, "Requesting host approval...", "info");
+    await attemptGuestDirectRelayJoin("quick-join");
+}
+
 export function triggerGuestAutoRejoin(reason = "manual") {
     if (!canAttemptGuestAutoRejoin()) return;
     scheduleGuestAutoRejoin(reason, true);
@@ -424,7 +461,12 @@ async function attemptGuestAutoRejoin(reason) {
                 return;
             }
             state.guestChannel = channel;
-            sendJson(channel, { t: "rejoin", id: state.localId, n: state.displayName });
+            sendJson(channel, {
+                t: "rejoin",
+                id: state.localId,
+                n: state.displayName,
+                pin: state.guestJoinPin || ""
+            });
             setTimeout(() => {
                 if (state.guestChannel !== channel) return;
                 if (!guestAwaitingRejoinAck) return;
@@ -469,6 +511,56 @@ async function attemptGuestAutoRejoin(reason) {
     state.guestChannel = relayChannel;
 }
 
+async function attemptGuestDirectRelayJoin(reason) {
+    const roomId = String(state.roomId || "").trim();
+    if (!roomId) {
+        showNotice(els.guestConnectNotice, "Room code is missing.", "error");
+        return;
+    }
+    guestAwaitingRejoinAck = true;
+    const relayChannel = createMqttRelayChannel("guest", roomId, state.localId, {
+        onOpen: (channel) => {
+            if (state.role !== "guest") {
+                channel.close();
+                return;
+            }
+            state.guestChannel = channel;
+            sendJson(channel, {
+                t: "rejoin",
+                id: state.localId,
+                n: state.displayName,
+                pin: state.guestJoinPin || ""
+            });
+            setTimeout(() => {
+                if (state.guestChannel !== channel) return;
+                if (!guestAwaitingRejoinAck) return;
+                try {
+                    channel.close();
+                } catch (_error) {
+                    // Ignore close errors.
+                }
+                showNotice(els.guestConnectNotice, "Waiting for host approval. You can retry.", "warn");
+            }, REJOIN_ACK_TIMEOUT_MS);
+        },
+        onClose: () => {
+            if (state.guestChannel === relayChannel) {
+                state.guestChannel = null;
+            }
+            updateConnectionStatus(false, "Disconnected");
+        },
+        onMessage: (payload) => {
+            if (state.guestChannel !== relayChannel) return;
+            onHostChannelMessage(payload, relayChannel);
+        },
+        onFailure: (errorInfo) => {
+            const reasonText = errorInfo && errorInfo.reason ? errorInfo.reason : "unknown";
+            showNotice(els.guestConnectNotice, "Could not connect to room (" + reasonText + ").", "error");
+            log.warn("guest", "Quick join relay failed", { reason, reasonText, roomId });
+        }
+    });
+    state.guestChannel = relayChannel;
+}
+
 export function handleGuestInboundMessage(rawData, channel) {
     let message;
     try {
@@ -493,10 +585,13 @@ export function handleGuestInboundMessage(rawData, channel) {
     if (message.t === "rejoinReject") {
         if (message.to && message.to !== state.localId) return;
         guestAwaitingRejoinAck = false;
+        const rejectReason = typeof message.reason === "string" && message.reason.trim()
+            ? message.reason.trim()
+            : "Host approval required.";
         updateConnectionStatus(false, "Reconnect pending approval");
         showNotice(
-            els.tableNotice,
-            "Host has not approved reconnect yet. Retrying shortly...",
+            state.currentView === "table" ? els.tableNotice : els.guestConnectNotice,
+            rejectReason + " Retrying shortly...",
             "warn"
         );
         if (state.guestChannel === channel) {

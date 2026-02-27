@@ -298,7 +298,22 @@ function onHostRecoveryRelayMessage(rawData, fromGuestId, relayChannel) {
 
     if (message.t === "rejoin") {
         const guestName = sanitizeHostName(message.n || "Guest");
-        if (isKnownGuestId(guestId)) {
+        const guestPin = String(message.pin || "").trim();
+        const roomPin = String(state.hostRoomPin || "").trim();
+        if (roomPin && guestPin !== roomPin) {
+            sendJson(relayChannel, { t: "rejoinReject", to: guestId, reason: "Invalid room PIN." });
+            return;
+        }
+
+        if (isKnownGuestId(guestId) && state.hostAutoApproveKnownRejoin) {
+            attachRelayGuest(guestId, guestName, relayChannel);
+            sendJson(relayChannel, { t: "rejoinAck", to: guestId, room: state.roomId || state.localId });
+            broadcastState();
+            renderHostLobby();
+            renderTable();
+            return;
+        }
+        if (!isKnownGuestId(guestId) && !state.hostRequireApprovalFirstJoin) {
             attachRelayGuest(guestId, guestName, relayChannel);
             sendJson(relayChannel, { t: "rejoinAck", to: guestId, room: state.roomId || state.localId });
             broadcastState();

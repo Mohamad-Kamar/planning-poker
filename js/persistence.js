@@ -142,6 +142,10 @@ function buildSnapshotFromState() {
             role: "host",
             localId,
             displayName,
+            connectionStrategy: state.connectionStrategy,
+            hostRequireApprovalFirstJoin: !!state.hostRequireApprovalFirstJoin,
+            hostAutoApproveKnownRejoin: !!state.hostAutoApproveKnownRejoin,
+            hostRoomPin: sanitizeText(state.hostRoomPin || "", 20),
             currentView: normalizeRoleView("host", state.currentView),
             roomId: normalizeId(state.roomId || localId) || localId,
             selectedVote,
@@ -155,6 +159,9 @@ function buildSnapshotFromState() {
         role: "guest",
         localId,
         displayName,
+        connectionStrategy: state.connectionStrategy,
+        hostRequireApprovalFirstJoin: !!state.hostRequireApprovalFirstJoin,
+        hostAutoApproveKnownRejoin: !!state.hostAutoApproveKnownRejoin,
         currentView: normalizeRoleView("guest", state.currentView),
         roomId: normalizeId(state.roomId) || null,
         selectedVote,
@@ -179,6 +186,9 @@ function normalizeLoadedSnapshot(snapshotRaw) {
     const selectedVote = normalizeVote(snapshotRaw.selectedVote);
     const roomId = normalizeId(snapshotRaw.roomId) || null;
     const currentView = normalizeRoleView(role, snapshotRaw.currentView);
+    const connectionStrategy = snapshotRaw.connectionStrategy === "manualWebRtc" ? "manualWebRtc" : "mqttQuickJoin";
+    const hostRequireApprovalFirstJoin = snapshotRaw.hostRequireApprovalFirstJoin !== false;
+    const hostAutoApproveKnownRejoin = snapshotRaw.hostAutoApproveKnownRejoin !== false;
 
     if (role === "host") {
         const session = normalizeHostSession(snapshotRaw.session, localId, displayName);
@@ -187,6 +197,10 @@ function normalizeLoadedSnapshot(snapshotRaw) {
             role: "host",
             localId,
             displayName,
+            connectionStrategy,
+            hostRequireApprovalFirstJoin,
+            hostAutoApproveKnownRejoin,
+            hostRoomPin: sanitizeText(snapshotRaw.hostRoomPin || "", 20),
             currentView,
             roomId: roomId || localId,
             selectedVote,
@@ -198,6 +212,9 @@ function normalizeLoadedSnapshot(snapshotRaw) {
         role: "guest",
         localId,
         displayName,
+        connectionStrategy,
+        hostRequireApprovalFirstJoin,
+        hostAutoApproveKnownRejoin,
         currentView,
         roomId,
         selectedVote,

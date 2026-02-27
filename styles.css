@@ -127,6 +127,7 @@ h1 {
 }
 
 input[type="text"],
+select,
 textarea {
     width: 100%;
     border: 1px solid var(--border);
@@ -138,6 +139,7 @@ textarea {
 }
 
 input[type="text"]:focus,
+select:focus,
 textarea:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.16);
@@ -619,6 +621,39 @@ textarea.code-box {
     padding: 20px;
     background: var(--white);
     border-radius: var(--radius-lg);
+}
+
+.room-qr-image {
+    width: 140px;
+    height: 140px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: #fff;
+}
+
+.manual-fallback-details > summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text);
+    list-style: none;
+}
+
+.manual-fallback-details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.manual-fallback-details > summary::before {
+    content: "▸ ";
+    color: var(--muted);
+}
+
+.manual-fallback-details[open] > summary::before {
+    content: "▾ ";
+}
+
+.manual-fallback-details[open] > summary {
+    margin-bottom: 12px;
 }
 
 .pending-rejoin-panel {

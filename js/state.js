@@ -19,7 +19,12 @@ export const state = {
     roomId: null,
     hostRecoveryRelay: null,
     hostPendingRejoinRequests: [],
-    guestAutoRejoinEnabled: false
+    guestAutoRejoinEnabled: false,
+    guestJoinPin: "",
+    connectionStrategy: "mqttQuickJoin",
+    hostRequireApprovalFirstJoin: true,
+    hostAutoApproveKnownRejoin: true,
+    hostRoomPin: ""
 };
 
 export function createShortId() {

@@ -17,6 +17,7 @@ export function startHostSession(displayName) {
     state.selectedVote = null;
     state.hostResponseCodeRaw = "";
     state.roomId = state.localId;
+    state.hostRoomPin = "";
     state.hostPendingRejoinRequests = [];
     setSignalCodeDisplay(
         els.hostResponseCode,

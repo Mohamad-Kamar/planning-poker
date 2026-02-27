@@ -240,6 +240,7 @@ export function shutdownHost(noticeMessage) {
     state.hostResponseCodeRaw = "";
     state.roomId = null;
     state.hostPendingRejoinRequests = [];
+    state.hostRoomPin = "";
     setSignalCodeDisplay(
         els.hostResponseCode,
         els.hostResponseCodeMeta,
@@ -258,6 +259,7 @@ export function shutdownHost(noticeMessage) {
 
 export function shutdownGuest(noticeMessage) {
     state.guestAutoRejoinEnabled = false;
+    state.guestJoinPin = "";
     resetGuestConnection();
     state.guestRemoteState = null;
     state.guestJoinCodeRaw = "";

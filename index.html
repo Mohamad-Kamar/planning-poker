@@ -11,7 +11,7 @@
         <div class="title-bar">
             <div class="title-copy">
                 <h1>Planning Poker</h1>
-                <div class="subtle">Zero-server WebRTC with manual handshake</div>
+                <div class="subtle">Zero-server planning poker with MQTT quick join</div>
             </div>
             <div class="row">
                 <span id="currentUserBadge" class="current-user-badge" aria-live="polite"></span>
@@ -46,7 +46,7 @@
                     <div class="row-between">
                         <div>
                             <div class="panel-heading">Host Lobby</div>
-                            <div class="panel-note">Guest sends Join Code -> host pastes it -> host sends Response Code back.</div>
+                            <div class="panel-note">Share room code/link for quick MQTT join. Manual code exchange is optional.</div>
                         </div>
                         <span class="chip">You are host</span>
                     </div>
@@ -61,29 +61,47 @@
                             </div>
                         </div>
 
-                        <div class="panel stack">
+                        <div id="hostRoomAccessPanel" class="panel stack">
                             <div>
-                                <div class="panel-heading">Add Player</div>
-                                <div class="panel-note">Paste one guest code at a time, click Accept, then share the generated response code.</div>
+                                <div class="panel-heading">Room Access</div>
+                                <div class="panel-note">Primary flow: share room code or link and approve joins.</div>
                             </div>
-                            <textarea id="hostIncomingJoinCode" data-testid="input-host-join-code" class="code-box" placeholder="Paste guest join code"></textarea>
-                            <div class="row">
-                                <button id="acceptGuestBtn" data-testid="btn-accept-guest" class="btn btn-primary">Accept Guest</button>
-                                <button id="clearHostJoinCodeBtn" data-testid="btn-clear-host-join-code" class="btn btn-secondary">Clear</button>
-                            </div>
-
                             <div class="stack">
-                                <label class="field-label">Response Code (send to guest)</label>
-                                <div id="hostResponseCode" data-testid="code-host-response" class="code-display mono">No response code yet.</div>
-                                <div id="hostResponseCodeMeta" class="code-meta">Waiting for guest join code.</div>
-                                <div id="hostResponseCodeQuality" class="code-quality quality-medium">Shareability: waiting for code</div>
+                                <label class="field-label">Room Code</label>
+                                <div id="hostRoomCode" class="code-display mono"></div>
                                 <div class="row">
-                                    <button id="copyHostResponseCodeBtn" data-testid="btn-copy-host-response-plain" class="btn btn-secondary">Copy Plain</button>
-                                    <button id="copyHostResponseCodeFormattedBtn" data-testid="btn-copy-host-response-formatted" class="btn btn-secondary">Copy Formatted</button>
+                                    <button id="copyHostRoomCodeBtn" class="btn btn-secondary">Copy Room Code</button>
+                                    <button id="copyHostJoinLinkBtn" class="btn btn-secondary">Copy Join Link</button>
+                                </div>
+                                <label class="field-label" for="hostRoomPinInput">Room PIN (optional)</label>
+                                <input id="hostRoomPinInput" type="text" maxlength="20" placeholder="Optional PIN for guests">
+                                <img id="hostRoomQrImage" class="room-qr-image" alt="Join room QR code">
+                            </div>
+                        </div>
+
+                        <details id="hostManualFallbackDetails" class="panel stack manual-fallback-details">
+                            <summary>Manual WebRTC fallback (copy/paste codes)</summary>
+                            <div class="stack">
+                                <textarea id="hostIncomingJoinCode" data-testid="input-host-join-code" class="code-box" placeholder="Paste guest join code"></textarea>
+                                <div class="row">
+                                    <button id="acceptGuestBtn" data-testid="btn-accept-guest" class="btn btn-primary">Accept Guest</button>
+                                    <button id="clearHostJoinCodeBtn" data-testid="btn-clear-host-join-code" class="btn btn-secondary">Clear</button>
+                                </div>
+
+                                <div class="stack">
+                                    <label class="field-label">Response Code (send to guest)</label>
+                                    <div id="hostResponseCode" data-testid="code-host-response" class="code-display mono">No response code yet.</div>
+                                    <div id="hostResponseCodeMeta" class="code-meta">Waiting for guest join code.</div>
+                                    <div id="hostResponseCodeQuality" class="code-quality quality-medium">Shareability: waiting for code</div>
+                                    <div class="row">
+                                        <button id="copyHostResponseCodeBtn" data-testid="btn-copy-host-response-plain" class="btn btn-secondary">Copy Plain</button>
+                                        <button id="copyHostResponseCodeFormattedBtn" data-testid="btn-copy-host-response-formatted" class="btn btn-secondary">Copy Formatted</button>
+                                    </div>
                                 </div>
                             </div>
-                            <div id="hostLobbyNotice" class="notice info"></div>
-                        </div>
+                        </details>
+
+                        <div id="hostLobbyNotice" class="notice info"></div>
                     </div>
 
                     <div class="row-between">
@@ -98,37 +116,52 @@
                     <div class="row-between">
                         <div>
                             <div class="panel-heading">Join Host</div>
-                            <div class="panel-note">1) Copy your Join Code and send it to host. 2) Paste host Response Code. 3) Enter table.</div>
+                            <div class="panel-note">Default: enter room code. Manual signaling is still available below.</div>
                         </div>
                         <span class="chip">Guest mode</span>
                     </div>
 
-                    <div class="stepper">
-                        <span id="guestStep1" class="step active">1. Share Join Code</span>
-                        <span id="guestStep2" class="step">2. Paste Response</span>
-                        <span id="guestStep3" class="step">3. Connected</span>
-                    </div>
-
-                    <div class="panel stack">
-                        <label class="field-label">Your Join Code</label>
-                        <div id="guestJoinCode" data-testid="code-guest-join" class="code-display mono">Generating code...</div>
-                        <div id="guestJoinCodeMeta" class="code-meta">Preparing connection details.</div>
-                        <div id="guestJoinCodeQuality" class="code-quality quality-medium">Shareability: waiting for code</div>
+                    <div id="guestQuickJoinPanel" class="panel stack">
+                        <label class="field-label" for="guestRoomCodeInput">Room Code</label>
+                        <input id="guestRoomCodeInput" data-testid="input-guest-room-code" type="text" placeholder="Enter room code">
+                        <label class="field-label" for="guestRoomPinInput">Room PIN (optional)</label>
+                        <input id="guestRoomPinInput" data-testid="input-guest-room-pin" type="text" placeholder="Enter room PIN">
                         <div class="row">
-                            <button id="copyGuestJoinCodeBtn" data-testid="btn-copy-guest-join-plain" class="btn btn-primary">Copy Plain</button>
-                            <button id="copyGuestJoinCodeFormattedBtn" data-testid="btn-copy-guest-join-formatted" class="btn btn-secondary">Copy Formatted</button>
-                            <button id="regenerateGuestJoinCodeBtn" data-testid="btn-regenerate-guest-join" class="btn btn-secondary">Regenerate</button>
-                        </div>
-                    </div>
-
-                    <div class="panel stack">
-                        <label class="field-label" for="guestResponseCodeInput">Host Response Code</label>
-                        <textarea id="guestResponseCodeInput" data-testid="input-guest-response-code" class="code-box" placeholder="Paste host response code"></textarea>
-                        <div class="row">
-                            <button id="connectGuestBtn" data-testid="btn-connect-guest" class="btn btn-primary">Connect</button>
+                            <button id="connectGuestRoomBtn" data-testid="btn-connect-guest-room" class="btn btn-primary">Join Room</button>
                             <button id="guestBackHomeBtn" data-testid="btn-guest-back-home" class="btn btn-secondary">Back</button>
                         </div>
                     </div>
+
+                    <details id="guestManualFallbackDetails" class="panel stack manual-fallback-details">
+                        <summary>Manual WebRTC fallback (copy/paste codes)</summary>
+                        <div class="stack">
+                            <div class="stepper">
+                                <span id="guestStep1" class="step active">1. Share Join Code</span>
+                                <span id="guestStep2" class="step">2. Paste Response</span>
+                                <span id="guestStep3" class="step">3. Connected</span>
+                            </div>
+
+                            <div class="stack">
+                                <label class="field-label">Your Join Code</label>
+                                <div id="guestJoinCode" data-testid="code-guest-join" class="code-display mono">Generating code...</div>
+                                <div id="guestJoinCodeMeta" class="code-meta">Preparing connection details.</div>
+                                <div id="guestJoinCodeQuality" class="code-quality quality-medium">Shareability: waiting for code</div>
+                                <div class="row">
+                                    <button id="copyGuestJoinCodeBtn" data-testid="btn-copy-guest-join-plain" class="btn btn-primary">Copy Plain</button>
+                                    <button id="copyGuestJoinCodeFormattedBtn" data-testid="btn-copy-guest-join-formatted" class="btn btn-secondary">Copy Formatted</button>
+                                    <button id="regenerateGuestJoinCodeBtn" data-testid="btn-regenerate-guest-join" class="btn btn-secondary">Regenerate</button>
+                                </div>
+                            </div>
+
+                            <div class="stack">
+                                <label class="field-label" for="guestResponseCodeInput">Host Response Code</label>
+                                <textarea id="guestResponseCodeInput" data-testid="input-guest-response-code" class="code-box" placeholder="Paste host response code"></textarea>
+                                <div class="row">
+                                    <button id="connectGuestBtn" data-testid="btn-connect-guest" class="btn btn-primary">Connect Manually</button>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
 
                     <div id="guestConnectNotice" class="notice info"></div>
                 </div>
@@ -184,7 +217,21 @@
         <div class="settings-stack">
             <div>
                 <div class="panel-heading">Connection Settings</div>
-                <div class="panel-note">Optional custom ICE servers. One server per line: <span class="mono">urls | username | credential</span></div>
+                <div class="panel-note">Select default connection mode and transport preferences.</div>
+            </div>
+
+            <div class="stack">
+                <label class="field-label" for="connectionStrategySelect">Default Connection Mode</label>
+                <select id="connectionStrategySelect">
+                    <option value="mqttQuickJoin">MQTT Quick Join (default)</option>
+                    <option value="manualWebRtc">Manual WebRTC Signaling</option>
+                </select>
+            </div>
+
+            <div class="stack">
+                <div class="field-label">MQTT Admission Controls</div>
+                <label><input id="hostRequireApprovalFirstJoinCheckbox" type="checkbox" checked> Require host approval for first join</label>
+                <label><input id="hostAutoApproveKnownRejoinCheckbox" type="checkbox" checked> Auto-approve known rejoins</label>
             </div>
 
             <div class="stack">
